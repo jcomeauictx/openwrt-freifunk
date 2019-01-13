@@ -28,10 +28,9 @@ without the need to wait for firmware enhancements.</P>
 <UL>
 <LI>
 EOF
-
-if [ -n "$(nvram get ff_adm_neturl)" ]; then
-nvram get ff_adm_neturl
-echo '</LI><LI>'
+ff_adm_neturl=$(nvram get ff_adm_neturl)
+if [ "$ff_adm_neturl" ]; then
+echo "<A HREF="$ff_adm_neturl">$ff_adm_neturl</A></LI><LI>"
 fi
 
 cat<<EOF
@@ -47,6 +46,7 @@ Downloads</A>
 <LI STYLE="firmwarelinks:0;display:list-item;">Firmware download from this device:<BR> <A HREF="cgi-bin-download.bin?g">WRT54G</A> <A HREF="cgi-bin-download.bin?gs">WRT54GS</A> <A HREF="cgi-bin-download.bin?gs40">WRT54GS-v4.0</A> <A HREF="cgi-bin-download.bin?g3g">WRT54G3G+UMTS</A> <A HREF="cgi-bin-download.bin?a">All0277</A> <A HREF="cgi-bin-download.bin?moto">WR850G</A> <A HREF="cgi-bin-download.bin?se505">SE505</A> <A HREF="cgi-bin-download.bin?trx">WAP54G/WL500</A> </LI>
 <LI><A HREF="cgi-bin-dev-zero.bin">Never-ending download from /dev/zero</A>
 </LI>
+<LI><A HREF="local.html">Local information and news</A></LI>
 </UL>
 <P><B>Please
 note</B>: Internet access over the Freifunk network is bound to technical
