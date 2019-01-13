@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Place your firewall addons here or use /etc/local.fw-xxx
+
+#MACS="00:00:01:00:00:01 0c:68:0b:02:a3:1e"
+
+case $1 in
+	start)
+		for i in $MACS; do
+			# You can also add "-I INPUT", but it is sufficient
+			# to block forwarding, since the delinquent will get
+			# the routing but no (internet) connectivity.
+			iptables -I FORWARD -m mac --mac-source $i -j DROP
+		done
+	;;
+	stop)
+		for i in $MACS; do
+			iptables -D FORWARD -m mac --mac-source $i -j DROP
+		done
+	;;
+esac

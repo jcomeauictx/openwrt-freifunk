@@ -1,0 +1,35 @@
+#!/bin/sh
+c="ip addr"
+if [ 1 = $# ]; then
+  c="ip addr show label "$*
+elif [ 1 -lt $# ]; then
+  cat 1>&2 <<EOF
+
+Install freifunk-openwrt-compat if you need ifconfig.
+
+The ifconfig command can be replaced with the ip command.
+For link layer settings refer to "ip link help"; For
+ip adress settings refer to "ip addr help". Examples:
+
+ip link set dev $1 up
+ip link set dev $1 down
+ip link set dev $1 mtu 1500
+ip link set dev $1 address 00:01:02:03:04:05
+
+# Change ipv4 address of $1:
+ip -f inet addr flush dev $1
+ip addr add dev $1 192.168.1.1/16 broadcast 192.168.255.255
+
+# Handle ipv4 alias devices:
+ip addr del dev $1 192.168.1.2 label $1:0
+ip addr add dev $1 192.168.1.2/24 label $1:0
+
+Change IP address parameters: Delete the old addr first.
+Use "ipcalc -p" to find out the /XX prefix for a netmask.
+
+EOF
+  exit 1
+fi
+echo "[Install freifunk-openwrt-compat for $0]">&2
+set -x
+exec $c

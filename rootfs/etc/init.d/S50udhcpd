@@ -1,0 +1,83 @@
+#!/bin/sh
+
+test -x /etc/init.d/S*dnsmasq && exit
+
+write_resolv() {
+	WAN_DNS=$(nvram get wan_dns)
+	WAN_DOMAIN=$(nvram get wan_domain)
+	rm -f $1
+	local i=
+	# DNS: German Privacy Foundation, CCC Bln, google, opendns
+	IFS=\;
+	for i in ${WAN_DNS:-87.118.100.175;213.73.91.35;8.8.8.8;208.67.222.222};do
+		case $WAN_DNS_FST in "")
+			WAN_DNS_FST=$i
+		;;*)case $WAN_DNS_SCD in "")
+			WAN_DNS_SCD=$i
+		;;esac;;esac
+		echo "nameserver $i" >> $1
+	done
+	unset IFS
+	case $WAN_DOMAIN in "");;*)
+		echo "search $WAN_DOMAIN">>$1
+	;;esac
+}
+
+case $1 in
+	start)
+		echo "Starting udhcpd..."
+		. /etc/functions.sh
+		get_netparam
+
+		write_resolv /var/etc/resolv.conf
+
+		DHCPNUM=$(nvram get dhcp_num)
+		DHCPNUM=${DHCPNUM:-6}
+		LAN_PROTO=$(nvram get lan_proto)
+		LAN_PROTO=${LAN_PROTO:-static}
+		case $DHCPNUM in 0);;*)case $LAN_PROTO in static)
+			test -d /var/run || mkdir -p /var/run
+			test -f /var/run/udhcpd.leases || touch /var/run/udhcpd.leases
+			DHCPLEASE=$(nvram get dhcp_lease)
+			DHCPLEASE=${DHCPLEASE:-12h}
+			case $DHCPLEASE in 0)DHCPLEASE=12h;;esac
+			case ${DHCPLEASE%[hH]} in $DHCPLEASE);;*)
+				DHCPLEASE=$(( ${DHCPLEASE%[hH]} * 3600 ))
+			;;esac
+			case ${DHCPLEASE%[mM]} in $DHCPLEASE);;*)
+				DHCPLEASE=$(( ${DHCPLEASE%[mM]} * 60 ))
+			;;esac
+			DHCPNET=$(echo $LANNET|cut -d'.' -f1-3)
+			DHCPBEG=$(nvram get dhcp_start)
+			DHCPBEG=${DHCPBEG##*.}
+			DHCPBEG=${DHCPBEG:-100}
+			DHCPEND=$(( $DHCPBEG + $DHCPNUM ))
+		cat>/var/etc/udhcpd.conf<<EOM
+start 		$DHCPNET.$DHCPBEG
+end		$DHCPNET.$DHCPEND
+max_leases	$DHCPNUM
+opt		router $LANADR
+opt		subnet $LANMSK
+opt		lease $DHCPLEASE
+${WAN_DNS_FST:+opt dns $WAN_DNS_FST}
+${WAN_DNS_SCD:+opt dns $WAN_DNS_SCD}
+${WAN_DNS_DOMAIN:+opt domain $WAN_DOMAIN}
+interface	$LANDEV
+lease_file	/var/run/udhcpd.leases
+$(cat /etc/local.udhcpd.conf 2>&-)
+EOM
+			/usr/sbin/udhcpd
+		;;esac;;esac
+	;;
+	stop)
+		echo "Stopping udhcpd..."
+		killall udhcpd
+	;;
+	restart)
+		$0 stop
+		$0 start
+	;;
+	*)
+		echo "Usage: $0 start|stop|restart"
+	;;
+esac

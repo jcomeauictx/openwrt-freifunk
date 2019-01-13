@@ -1,0 +1,55 @@
+Package: ip
+Status: install ok installed
+Root: /
+Version: 2.0
+
+Package: wl
+Status: install ok installed
+Root: /
+Version: 1.0
+
+Package: wificonf
+Status: install ok installed
+Root: /
+Version: 1.13
+
+Package: kernel
+Status: install ok installed
+Root: /
+Version: 2.4.30-brcm-3
+
+Package: base-files
+Status: install ok installed
+Root: /
+Version: 999
+
+Package: freifunk-webadmin
+Status: install ok installed
+Root: /
+Version: 1.7.4
+
+Package: freifunk-upload
+Status: install ok installed
+Root: /
+Version: 0.8
+
+Package: freifunk-mtdkill
+Status: install ok installed
+Root: /
+Version: 0.2
+
+Package: freifunk-rdate
+Status: install ok installed
+Root: /
+Version: 1.7.3
+
+Package: freifunk-olsrd
+Status: install ok installed
+Root: /
+Version: 0.6.0
+
+Package: dropbear
+Status: install ok installed
+Root: /
+Version: 0.49
+

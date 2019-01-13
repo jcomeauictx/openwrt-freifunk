@@ -1,0 +1,32 @@
+#!/bin/ash
+
+export HOME=/tmp
+export USER=root
+export LOGNAME=root
+
+[ "$1" = "firmware" -a "$ACTION" = "add" ] && {
+	[ -f "/lib/firmware/$FIRMWARE" ] && {
+		echo 1 > "/proc$DEVPATH/loading"
+		cp "/lib/firmware/$FIRMWARE" "/proc$DEVPATH/data"
+		echo 0 > "/proc$DEVPATH/loading"
+	}
+	exit 0
+}
+
+test "add" = "$ACTION" && {
+	s=$(pidof hotplug|wc -w)
+	test $s -gt 0 && sleep $s
+}
+
+[ \! -z "$1" -a -d /etc/hotplug.d/$1 ] && {
+	for script in $(ls /etc/hotplug.d/$1/* 2>&-); do (
+		[ -f $script ] && . $script
+	); done
+}
+
+
+[ "${INTERFACE%%[0-9]*}" = "wds" ] && { 
+	[ -x "/usr/sbin/nas" ] && /usr/sbin/nas lan $INTERFACE up
+ 	ip link set dev $INTERFACE up
+	/usr/sbin/brctl addif br0 $INTERFACE
+}

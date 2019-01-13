@@ -1,0 +1,51 @@
+<!DOCTYPE HTML PUBLIC "-//SoftQuad//DTD HoTMetaL PRO 4.0::19971010::extensions to HTML 4.0//EN"
+ "hmpro4.dtd">
+
+<HTML>
+  
+  <HEAD>
+    <TITLE></TITLE>
+  </HEAD>
+  
+  <BODY ONLOAD="if(window.load)load()" BGCOLOR="white" 
+  STYLE="padding:0;margin:0">
+    <DIV ID="map" STYLE="width:100%; height:100%"></DIV>
+
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript">
+var map = null;
+function alert(){}
+function load()
+{
+  map = new GMap2(document.getElementById("map"));
+  map.addControl(new GOverviewMapControl());
+  map.addControl(new GLargeMapControl());
+  map.addControl(new GMapTypeControl());
+  var ll = parent.document.systemform.ff_adm_latlon.value;
+  var lla = ll.split(";");
+  if (1 >= lla.length) lla = ll.split(":");
+  if (1 >= lla.length) lla = ll.split(",");
+  if (1 < lla.length)
+  {
+    pt = new GLatLng(lla[0], lla[1]);
+    map.setCenter(pt, 14);
+    map.addOverlay(new GMarker(pt));
+  }
+  else
+  {
+    map.setCenter(new GLatLng(51, 10), 6);
+  }
+  GEvent.addListener(map, "click", function(overlay, pt)
+  {
+    if (pt)
+    {
+      map.clearOverlays();
+      map.addOverlay(new GMarker(pt));
+      parent.document.systemform.ff_adm_latlon.value = pt.lat()+';'+pt.lng();
+    }
+  });
+}
+</SCRIPT>
+
+<SCRIPT SRC="http://maps.google.com/maps?file=api&amp;v=2.58" TYPE="text/javascript"></SCRIPT>
+  </BODY>
+</HTML>

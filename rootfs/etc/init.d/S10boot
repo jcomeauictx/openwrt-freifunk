@@ -1,0 +1,72 @@
+#!/bin/sh
+
+. /etc/functions.sh
+
+test -e /sbin/sysctl && sysctl -p
+test -f /proc/jffs2_bbc && echo "S" > /proc/jffs2_bbc
+
+ff_ipkg="$(nvram get ff_ipkg)"
+ff_ipkg="$ff_ipkg${ff_ipkg:+;}src freifunk http://download.berlin.freifunk.net/ipkg/packages"
+
+TOTMEM=$(grep MemTotal: /proc/meminfo|if read line;then set $line;echo $2;fi)
+if [ -n "$TOTMEM" ] && [ 8192 -gt $TOTMEM ]; then
+	case $FAILSAFE in "")case $READONLY in "")
+		# No wl driver with FAILSAFE or READONLY:
+		# Saves 1 Mb RAM to make trx upload possible
+		insmod wl
+	;;esac;;esac
+else
+	insmod wl
+	case $FAILSAFE in "")
+		ff_syslog=$(nvram get ff_syslog)
+		test -e /sbin/klogd && klogd
+		test -e /sbin/syslogd && syslogd ${ff_syslog:+-R $ff_syslog -L} -C 16
+		test -e /sbin/resetd && /sbin/resetd &
+	;;esac
+	ff_ipkg="$ff_ipkg;src whiterussian http://downloads.openwrt.org/whiterussian/packages"
+	ff_ipkg="$ff_ipkg;src non-free http://downloads.openwrt.org/whiterussian/packages/non-free"
+fi
+
+modules insmod_all
+
+mkdir -p /var/etc
+mkdir -p /var/lock
+mkdir -p /var/log
+mkdir -p /var/run
+
+cat>/var/etc/hosts<<EOF
+127.0.0.1       localhost
+::1             localhost
+EOF
+
+IFS=\;
+for i in $ff_ipkg;do
+	echo $i>>/var/etc/ipkg.conf
+done
+unset IFS
+cat>>/var/etc/ipkg.conf<<EOF
+dest root /
+dest ram /tmp
+EOF
+
+ip addr add dev lo 127.0.0.1/8
+ip link set dev lo up
+ip link set dev eth0 promisc on
+
+# configure the switch based on nvram if not in failsafe mode
+vif=$(ls /proc/switch 2>&-|cut -d' ' -f1)
+case $FAILSAFE in "")case $vif in "");;*)
+	for i in 0 1 2 3 4 5 6 7 8 9; do
+		vp="$(nvram get vlan${i}ports)"
+		case $vp in "");;*)
+			test -f /proc/switch/$vif/vlan/$i/ports && \
+			echo "$vp" > /proc/switch/eth0/vlan/$i/ports
+		;;esac
+	done
+;;esac;;esac
+
+HOSTNAME=$(nvram get wan_hostname)
+HOSTNAME=${HOSTNAME%%.*}
+echo ${HOSTNAME:=Freifunk} > /proc/sys/kernel/hostname
+
+vconfig set_name_type VLAN_PLUS_VID_NO_PAD

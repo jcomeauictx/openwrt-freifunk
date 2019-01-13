@@ -1,0 +1,44 @@
+#!/bin/sh
+
+export DATE="16.3.2010";SCRIPT=${0#/rom}
+export TITLE="Contact"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Contact</H1>
+<P>The administrator of this access point
+has entered the these contact information:</P>
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="1" CELLPADDING="1" CELLSPACING="0" CLASS="form"
+RULES="rows" WIDTH="448">
+<TR>
+<TD>Nickname:&nbsp;</TD>
+<TD>$(nvram get ff_adm_nick)</TD>
+</TR>
+<TR>
+<TD>Name:&nbsp;</TD>
+<TD>$(nvram get ff_adm_name)</TD>
+</TR>
+<TR>
+<TD>Email:&nbsp;</TD>
+<TD>$(nvram get ff_adm_mail|sed 's/@/<span>\@<\/span>/g')</TD>
+</TR>
+<TR>
+<TD><SPAN LANG="ca">Tel&egrave;fon:</SPAN>Phone:&nbsp;</TD>
+<TD>$(nvram get ff_adm_tel)</TD>
+</TR>
+<TR>
+<TD>Location:&nbsp;</TD>
+<TD>$(nvram get ff_adm_loc)</TD>
+</TR>
+<TR>
+<TD>GPS:&nbsp;</TD>
+<TD>$(nvram get ff_adm_latlon)</TD>
+</TR>
+<TR>
+<TD>Notes:&nbsp;</TD>
+<TD>$(nvram get ff_adm_note)</TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE>
+EOF
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

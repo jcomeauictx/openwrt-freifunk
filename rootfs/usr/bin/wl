@@ -1,0 +1,4 @@
+#!/bin/sh
+
+case $1 in "-i");;*)dev=$(sed -n 's/^ *\([^:]\+\):.*/\1/p' /proc/net/wireless 2>&-);;esac
+exec /usr/sbin/wl ${dev:+-i $dev} $*

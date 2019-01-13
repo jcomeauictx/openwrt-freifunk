@@ -1,0 +1,88 @@
+#!/bin/ash
+. /etc/functions.sh
+
+# valid interface?
+if_valid () {
+	ip link show dev "$1" >&- 2>&- ||
+	[ "${1%%[0-9]}" = "br" ] ||
+	{
+		[ "${1%%[0-9]}" = "vlan" ] && ( 
+			i=${1#vlan}
+			vif=$(ls /proc/switch 2>&-|cut -d' ' -f1)
+			hwname=$(nvram get vlan${i}hwname)
+			hwaddr=$(nvram get ${hwname}macaddr)
+			if [ -z "$hwaddr" ]; then
+				vports=$(cat /proc/switch/$vif/vlan/$i/ports 2>&-)
+				test -n "$vif" && test 1 -lt ${#vports} && test -n "$(nvram get 'vlan'$i'ports')" || return 1
+			fi
+			ip link set dev $vif up
+			vconfig add $vif $i 2>&-
+		)
+	} ||
+	{ echo -e "# $1 ignored: can't find/create"; false; }
+}
+
+if_init $1
+
+$ignr if_valid $iface || return
+$ignr ip addr flush dev $iface 2>/dev/null
+$ignr ip link set dev $iface down 2>/dev/null
+case $ignr in "") case $iface in br[0-9])
+	stp=$(nvram get ${type}_stp)
+	brctl delbr $iface 2>/dev/null
+	brctl addbr $iface
+	brctl setfd $iface 0
+	brctl stp $iface ${stp:-0}
+	for if in $(nvram get ${type}_ifnames); do {
+		if_valid $if || continue
+		ip link set dev $if up
+		brctl addif $iface $if
+	} done
+;;esac;;esac
+
+mac=$(nvram get ${type}_hwaddr)
+${mac:+ip link set dev $iface address $mac}
+
+if_proto=$(nvram get ${type}_proto)
+case $if_proto in
+	static)
+		ip=$(nvram get ${type}_ipaddr)
+		netmask=$(nvram get ${type}_netmask)
+		gateway=$(nvram get ${type}_gateway)
+
+		ip addr add dev $iface $ip${netmask:+/$(ipcalc -p $ip $netmask|cut -d'=' -f2)} broadcast +
+		ip link set dev $iface up
+
+		# Send out hint on my IP
+		arping -q -I $iface -c 0 0.0.0.0 &
+
+		${gateway:+ip route add default via $gateway}
+
+		test -f /etc/resolv.conf && return
+		for dns in $(nvram get ${type}_dns); do
+			echo "nameserver $dns" >> /etc/resolv.conf
+		done
+	;;
+	dhcp)
+		test -f $pidfile && kill $(cat $pidfile)
+		ip link set dev $iface up
+		udhcpc -i $iface -b -p $pidfile &
+	;;
+	pppoe)
+		username=$(nvram get ppp_username)
+		password=$(nvram get ppp_passwd)
+		redial=$(nvram get ppp_redialperiod)
+		idletime=$(nvram get ppp_idletime)
+		mtu=$(nvram get wan_mtu)
+		resolv=$(pidof dnsmasq >&- && egrep -q '^ *nameserver \+127\.0\.0\.1\b' /etc/resolv.conf && sed -n 's/^ *resolv-file *= *//p' /etc/dnsmasq.conf)
+
+		ip link set dev $iface up
+		/sbin/pppoecd $iface -u $username -p $password -f ${resolv:-/etc/resolv.conf} -i 0 -m 0 -I $redial -T $idletime ${mtu:+-t $mtu} -k
+		pidof pppoecd > $pidfile
+	;;
+	none)
+	;;
+	*)
+		echo "### WARNING $iface: proto $if_proto not supported"
+	;;
+esac

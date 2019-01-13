@@ -1,0 +1,29 @@
+#!/bin/sh
+case $FAILSAFE in
+	"")
+		# Set TZ
+		. /etc/profile 1>&-
+		. /etc/functions.sh
+		get_netparam
+		test -d /var/etc || mkdir -p /var/etc
+		ff_pw="$(nvram get ff_pw)"
+		test -n "$ff_pw" || ff_pw=admin
+		test -n "$LOADR" && all_allow=P:$LONET/$LOPRE
+		test -n "$LANADR" && lan_allow=P:$LANNET/$LANPRE
+		test "$(nvram get ff_unsecure_webadmin)" = "1" && all_allow=P:0.0.0.0/0
+		cat > /var/etc/httpd.conf <<EOM
+A:*
+$all_allow
+$lan_allow
+Q:*
+I:cgi-bin-index.html
+#E:/cgi-bin-404.html
+/cgi-bin:root:$ff_pw
+.asp:text/html
+EOM
+		/usr/sbin/httpd -c /var/etc/httpd.conf -p 80 -h /www -r "Freifunk Webadmin, user name is root!! Please use 'ssh root@[wifi-ip] -L 8080:localhost:80' then browse to http://localhost:8080/"
+	;;
+	*)
+		/usr/sbin/httpd -p 80 -h /www -r "Freifunk Webadmin, FAILSAFE"
+	;;
+esac

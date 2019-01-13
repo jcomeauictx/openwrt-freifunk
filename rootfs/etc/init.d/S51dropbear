@@ -1,0 +1,3 @@
+#!/bin/sh
+ln -s /etc/dropbear /tmp/.ssh
+/usr/bin/dropbear

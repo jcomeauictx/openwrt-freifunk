@@ -1,0 +1,122 @@
+#!/bin/sh
+
+export DATE="18.4.2010";SCRIPT=${0#/rom}
+export TITLE="Admin: WAN"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: WAN</H1>
+EOF
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+wan_ifname="$(nvram get wan_ifname)"
+if [ -z "$QUERY_STRING" ]; then
+#Speedups
+wan_proto="$(nvram get wan_proto)"
+wan_ports="$(nvram get $wan_ifname'ports')"
+
+cat<<EOF
+<FORM ACTION="wan.html" METHOD="POST"><TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="form"><TR
+TITLE="Determines the operation mode of the internet connector (single RJ45 jack). If the PPPoE packet is installed, the 'PPPoE' operation mode will start the PPPoE daemon automatically.">
+<TD>WAN
+Protocol:</TD><TD><SELECT NAME="wan_proto" ONCHANGE="this.form.wan_ipaddr.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.wan_netmask.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.wan_gateway.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));">
+<OPTION
+VALUE='dhcp' $(test "$wan_proto" = "dhcp" && echo "selected=selected")>Query DHCP
+server</OPTION>
+<OPTION
+VALUE='static' $(test "$wan_proto" = "static" && echo "selected=selected")>Static</OPTION>
+<OPTION
+VALUE='pppoe' $(test "$wan_proto" = "pppoe" && echo "selected=selected")>PPPoE</OPTION>
+<OPTION
+VALUE='disabled' $(test "$wan_proto" = "disabled" && echo "selected=selected")>Disabled</OPTION>
+</SELECT> </TD>
+</TR><TR
+TITLE="This is the IP address setting of the internet jack (RJ45).">
+<TD>WAN
+IP:</TD><TD><INPUT NAME="wan_ipaddr" SIZE="32" TYPE="TEXT" VALUE="$(nvram get wan_ipaddr)"$(if [ "$wan_proto" != "static" ] && [ "$wan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="The netmask determines, which wired IP addresses can be reached directly from the internet jack.">
+<TD>WAN
+Netmask:</TD><TD><INPUT NAME="wan_netmask" SIZE="32" TYPE="TEXT" VALUE="$(nvram get wan_netmask)"$(if [ "$wan_proto" != "static" ] && [ "$wan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="Default route for the internet jack.">
+<TD>WAN
+Default Route:</TD><TD><INPUT NAME="wan_gateway" SIZE="32" TYPE="TEXT" VALUE="$(nvram get wan_gateway)"$(if [ "$wan_proto" != "static" ] && [ "$wan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="It is possible to use more than one RJ45 connector as internet port. Example: '0 1 5' bridges the 'Internet' connector and the '1' connector. Standard: '0 5'.">
+<TD>RJ45 Connectors:</TD><TD><INPUT NAME="wan_ports" SIZE="32" TYPE="TEXT" VALUE="$wan_ports"$(if [ -z "$wan_ifname" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR
+TITLE="Permits SSH to access the device via Internet.">
+<TD>Permit
+SSH:</TD><TD><INPUT NAME="ff_wanssh" TYPE="CHECKBOX" VALUE="1"$(if [ "$(nvram get ff_wanssh)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+<TR
+TITLE="Permits to access the web pages of this device via Internet.">
+<TD>Permit
+HTTP:</TD><TD><INPUT NAME="ff_wanhttp" TYPE="CHECKBOX" VALUE="1"$(if [ "$(nvram get ff_wanhttp)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+<TR
+TITLE="Permits to access the web pages of this device via Internet.">
+<TD>Permit HTTPS:</TD><TD><INPUT NAME="ff_wanhttps" TYPE="CHECKBOX" VALUE="1"$(if [ "$(nvram get ff_wanhttps)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+<TR
+TITLE="Permits to answer ICMP messages via Internet.">
+<TD>Permit
+Ping:</TD><TD><INPUT NAME="ff_wanicmp" TYPE="CHECKBOX" VALUE="1"$(if [ "$(nvram get ff_wanicmp)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+<TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR><TD COLSPAN="2"><INPUT NAME="post_wan" TITLE="Apply these settings. The settings are applied with the next restart." VALUE="Apply" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." VALUE="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+EOF
+
+else
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+DIRTY=
+if [ -n "$post_wan" ]; then
+if [ "pppoe" = "$wan_proto" ]; then
+wan_ifname=ppp0
+else
+wan_ifname=$(nvram get wan_device)
+fi
+for V in wan_proto wan_ifname wan_ipaddr wan_netmask wan_gateway wan_ports ff_wanssh ff_wanhttp ff_wanhttps ff_wanicmp; do
+eval "C=\$$V"
+C=$(httpd -d "$C")
+test "$V" = "wan_ports" && V=$wan_ifname'ports'
+if [ "$C" != "$(nvram get $V)" ]; then
+DIRTY=1
+nvram set $V="$C"
+fi
+done
+fi
+if [ -n "$DIRTY" ]; then
+nvram commit>/dev/null 2>&1
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>The
+changed settings are committed. The settings are active after the next
+<A HREF="reset.html">Restart</A>.</TD>
+</TR>
+</TABLE>
+EOF
+
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>No settings are
+changed.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

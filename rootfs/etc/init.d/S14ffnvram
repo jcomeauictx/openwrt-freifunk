@@ -1,0 +1,205 @@
+#!/bin/sh
+
+case $FAILSAFE in "");;*)exit;;esac
+
+. /etc/functions.sh
+
+# Set defaults here, at minimum the ip address
+
+DEF_ADR=""
+DEF_MSK="255.0.0.0"
+DEF_SSID="olsr.freifunk.net"
+DEF_BSSID="02:ca:ff:ee:ba:be"
+DEF_CHAN="10"
+DEF_FRAG="2346"
+DEF_RTS="250"
+DEF_ANTDIV=""
+DEF_HOSTNAME=""
+
+DIRTY=
+dev=$(sed -n 's/^ *\([^:]\+\):.*/\1/p' /proc/net/wireless 2>&-)
+
+case $DEF_ADR in "");;*)case $DEF_MSK in "");;*)case $DEF_SSID in "");;*)case $DEF_CHAN in "");;*)
+	nvram set wifi_ipaddr=$DEF_ADR
+	nvram set wifi_netmask=$DEF_MSK
+	nvram set wl0_ssid=$DEF_SSID
+	nvram set ff_bssid=$DEF_BSSID
+	nvram set wl0_channel=$DEF_CHAN
+	nvram set wl0_frag=$DEF_FRAG
+	nvram set wl0_rts=$DEF_RTS
+	nvram set wl0_antdiv=$DEF_ANTDIV
+	case $DEF_HOSTNAME in "");;*)nvram set wan_hostname=$DEF_HOSTNAME;;esac
+	nvram set wl0_mode=sta
+	nvram set wl0_infra=0
+	# For nvram erase: set wl0_ifname prevents "wifi up" defaults
+	case $(nvram get wl0_ifname) in "")nvram set wl0_ifname=$dev;;esac
+	DIRTY=1
+;;esac;;esac;;esac;;esac
+
+LATLON=$(/usr/sbin/nvram get ff_adm_gps)
+case $LATLON in "");;*)
+	IFS=\;\:\,
+	set $LATLON
+	case $1 in "");;*)case $2 in "");;*)
+		if [ ${1%.*} -ge 40 ] && [ ${1%.*} -le 60 ] && [ ${2%.*} -ge 0 ] && [ ${2%.*} -le 20 ]; then
+			/usr/sbin/nvram set ff_adm_latlon="$1;$2"
+		else
+			/usr/sbin/nvram set ff_adm_latlon="$2;$1"
+		fi
+		/usr/sbin/nvram unset ff_adm_gps
+		DIRTY=1
+	;;esac;;esac
+	unset IFS
+;;esac
+
+ff_txpwr=$(nvram get ff_txpwr)
+case $ff_txpwr in "");;*)
+	txpwr=66
+	# rough convert mW in qdbm
+	test $ff_txpwr -le 40 && txpwr=64
+	test $ff_txpwr -le 25 && txpwr=56
+	test $ff_txpwr -le 16 && txpwr=48
+	test $ff_txpwr -le 10 && txpwr=40
+	if [ "$txpwr" -gt "$(nvram get wl0_txpwr)" ]; then
+		nvram set wl0_txpwr=$txpwr
+	fi
+	nvram unset ff_txpwr
+	DIRTY=1
+;;esac
+
+case $(nvram get ff_dyngw) in "");;*)
+	nvram unset ff_dyngw
+	DIRTY=1
+;;esac
+
+case $(nvram get wl0_mrate) in "")
+	nvram set wl0_mrate=5500000
+	DIRTY=1
+;;esac
+
+case $(nvram get ff_txant) in "");;*)
+	# FFF < 1.3.10 compat
+	nvram set wl0_txant=$(nvram get ff_txant) unset ff_txant
+	DIRTY=1
+;;esac
+
+case $(nvram get ff_rfisheye) in "");;*)
+	# Renamed 1.6.30 to ff_dijklim
+	nvram unset ff_rfisheye
+	DIRTY=1
+;;esac
+
+case $dev in "");;*)
+	fnd=
+	old="$(nvram get lan_ifnames)"
+	for i in $old; do
+		case $i in $dev)fnd=1;;esac
+	done
+
+	wbr=
+	adr=$(nvram get wifi_ipaddr)
+	case $adr in ""|$(nvram get lan_ipaddr))
+		# WIFI dev should be in the bridge list
+		wbr=1
+	;;esac
+
+	case $wbr in $fnd);;*)
+		case $wbr in "")
+			new=
+			for i in $old; do
+				case $i in $dev);;*)new="$new $i";;esac
+			done
+			new=${new# }
+		;;*)
+			new="$old $dev"
+		;;esac
+		nvram set lan_ifnames="$new"
+		case $(/usr/sbin/nvram get lan_ifname) in "")
+			lan=$(nvram get lan_ifname)
+			case $lan in "");;*)lan=br0;;esac
+			nvram set lan_ifname=$lan
+		;;esac
+		DIRTY=1
+	;;esac
+
+	case $(nvram get wifi_ifname) in $dev);;*)
+		nvram set wifi_ifname=$dev
+		DIRTY=1
+	;;esac
+
+	case $(nvram get wifi_proto) in "")
+		nvram set wifi_proto=static
+		DIRTY=1
+	;;esac
+
+	case $(nvram get lan_gateway) in "");;*)case $(nvram get lan_gateway) in $(nvram get lan_ipaddr))
+		nvram unset lan_gateway
+		DIRTY=1
+	;;esac;;esac
+
+	case $(nvram get wan_gateway) in "");;*)case $(nvram get wan_gateway) in $(nvram get wan_ipaddr))
+		nvram unset wan_gateway
+		DIRTY=1
+	;;esac;;esac
+;;esac
+
+add_range() {
+	local net=
+	local new=
+	local add=$1
+	local now=$(nvram get ff_range)
+	IFS=\;\:\,
+	for net in ${now:-$WIFINET${WIFINET:+/}$WIFIPRE};do
+		case $add in "");;*)
+			case $(ipcalc -n ${net%/*}/${add#*/}|cut -d= -f2) in ${add%/*})
+				# added range larger/equal
+				net=$add
+				add=
+			;;*)case $(ipcalc -n ${add%/*}/${net#*/}|cut -d= -f2) in ${net%/*})
+				# existing range larger/equal
+				add=
+			;;esac;;esac
+		;;esac
+		new=${new:+$new;}$net
+	done
+	unset IFS
+	case $add in "");;*)
+		new=${new:+$new;}$add
+	;;esac
+	case $new in $WIFINET/$WIFIPRE|"")
+		nvram unset ff_range
+	;;*)
+		nvram set ff_range=$new
+	;;esac
+}
+
+case $(nvram get lan_proto) in olsr)
+	get_netparam
+	add_range $LANNET/$LANPRE
+	nvram set lan_proto=static
+	DIRTY=1
+;;esac
+
+case $(nvram get wan_proto) in olsr)
+	get_netparam
+	add_range $WANNET/$WANPRE
+	nvram set wan_proto=static
+	DIRTY=1
+;;esac
+
+wan_ifname=$(/usr/sbin/nvram get wan_ifname)
+
+case $(/usr/sbin/nvram get wan_ifname) in "")
+	nvram set wan_ifname=$(nvram get wan_ifname)
+	nvram set wan_proto=$(nvram get wan_proto)
+	DIRTY=1
+;;esac
+
+# General cleanup
+for i in $(nvram show|sed -n '/^[a-zA-Z0-9_\.]\+=$/s/=//p;/^filter_services[0-9]=/s/=.*//p');do
+	nvram unset $i
+	DIRTY=1
+done
+
+case $DIRTY in "");;*)nvram commit;;esac
+rm -f $0

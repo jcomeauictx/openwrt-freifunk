@@ -1,0 +1,85 @@
+#!/bin/sh
+
+export DATE="20.4.2010";SCRIPT=${0#/rom}
+export TITLE="Admin
+Login"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1 STYLE="display:none">Admin
+Login</H1>
+EOF
+
+srcip_for_ip() {
+ip route get $1 | sed -n "s#.* src[ ]\{1,\}\([0-9\.]\{1,\}\).*#\1#p"
+}
+srcdev_for_ip() {
+ip route get $1 | sed -n "s#.* dev[ ]\{1,\}\([a-z0-9]\{1,\}\).*#\1#p"
+}
+SRCIP=$(srcip_for_ip $REMOTE_ADDR)
+SRCDEV=$(srcdev_for_ip $REMOTE_ADDR)
+REDIR_ACTION="location.href='cgi-bin/index.html';"
+. /etc/functions.sh
+get_netparam
+if [ "$SRCDEV" != "lo" ] && [ "$LANADR" != "$SRCIP" ]; then
+if kill -0 $(cat /var/run/secureadmin.pid 2>/dev/null) 2>/dev/null; then
+REDIR_ACTION="location.href='https://$SRCIP/cgi-bin/index.html';"
+elif [ "1" != "$(nvram get ff_unsecure_webadmin)" ];then
+REDIR_ACTION=
+fi
+fi
+
+cat<<EOF
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript">
+//<!--
+$REDIR_ACTION
+//-->
+</SCRIPT>
+<P>Using
+the administration pages via a wireless connection is disabled. This is
+because the necessary password will be transferred unencypted every time a
+new page is accessed. You have the following alternatives to access the
+admin pages now:
+</SPAN></P>
+<UL>
+<LI>Use a wired connection via
+<A HREF="http://$(nvram get lan_ipaddr)/">http://$(nvram get lan_ipaddr)/</A>.</LI>
+<LI>Use an encrypted SSH connection:
+<DL>
+<DT>Linux:</DT>
+<DD>Open
+a terminal session and enter this command: <KBD>ssh -L
+8000:localhost:80 root@$SRCIP</KBD>. Enter the administration
+password. While the SSH session is connected, browse to this
+address: <A HREF="http://localhost:8000/cgi-bin/index.html">http://localhost:8000/cgi-bin/index.html</A>.
+</DD>
+<DT>Windows:</DT>
+<DD>Install
+the
+<A HREF="http://www.chiark.greenend.org.uk/~sgtatham/putty/download.html">PuTTY</A>
+SSH program. Start PuTTY. In the <B>Category</B> pane, navigate to
+the <B>Connection</B>/<B>SSH</B>/<B>Tunnels</B> page. Under <B>Source
+Port</B> enter: <KBD>8000</KBD>. Under <B>Destination</B> enter:
+<KBD>localhost:80</KBD>. Click on <B>[Add]</B>. Navigate to the
+<B>Session</B> page. Under <B>Host Name</B> enter: <KBD>$SRCIP</KBD>.
+Optional: enter a name under <B>Saved Sessions</B> and click <B>[Save]</B>.
+Click <B>[Open]</B> to start the ssh session. Enter the user name
+<KBD>root</KBD> as well as the administration password. While the
+SSH session is connected, browse to this address:
+<A HREF="http://localhost:8000/cgi-bin/index.html">http://localhost:8000/cgi-bin/index.html</A>.
+</DD>
+</DL></LI>
+<LI>If
+this is too secure for you, you can enable the unsecure web
+administration. Open an SSH command line and enter: <KBD>nvram set
+ff_unsecure_webadmin=1 commit &amp;&amp; reboot</KBD>.
+</LI>
+<LI>If this is too
+inconvenient for you, install the HTTPS administration software. Open an
+SSH command line and enter: <KBD>ipkg install freifunk-secureadmin-en</KBD>.
+After installation, restart the router.
+</LI>
+</UL>
+EOF
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

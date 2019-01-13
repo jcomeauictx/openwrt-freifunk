@@ -1,0 +1,17 @@
+#!/bin/sh
+case $FAILSAFE in
+	"")
+		case $(sed -n 's/^ *\([^:]\+\):.*/\1/p' /proc/net/wireless 2>&-) in "")
+			# No wl driver: Reboot in one hour
+			sh -c "sleep 3600;reboot"&
+		;;esac
+	;;
+	*)
+		# FAILSAFE: Reboot in one hour
+		sh -c "sleep 3600;reboot"&
+	;;
+esac
+# set leds to normal state
+echo "0x00" > /proc/sys/diag
+# sometimes http does not run
+pidof httpd >&- || /etc/init.d/S50httpd

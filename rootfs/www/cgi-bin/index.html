@@ -1,0 +1,246 @@
+#!/bin/sh
+
+export DATE="16.3.2010";SCRIPT=${0#/rom}
+export TITLE="Admin"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin</H1>
+<P>Welcome
+to the administration pages of this access point. Please send comments or
+corrections to this web interface (please mention the version 1.7.4)
+to the e-mail addresses</P>
+<TABLE BORDER="1" CELLPADDING="1" CELLSPACING="0" CLASS="fixwidth">
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='jmartin';
+eadr+=unescape('%40');
+eadr+='epsem.upc.edu';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT>,
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='soler';
+eadr+=unescape('%40');
+eadr+='eupm.upc.edu';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT></TD>
+<TD VALIGN="TOP">(CA)</TD>
+</TR>
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='sven-ola';
+eadr+=unescape('%40');
+eadr+='gmx.de';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT></TD>
+<TD VALIGN="TOP">(DE, EN)</TD>
+</TR>
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='tat';
+eadr+=unescape('%40');
+eadr+='riseup.net';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT>,
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='magnus.henkel';
+eadr+=unescape('%40');
+eadr+='web.de';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT></TD>
+<TD VALIGN="TOP">(ES)</TD>
+</TR>
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='loloster';
+eadr+=unescape('%40');
+eadr+='gmail.com';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT></TD>
+<TD VALIGN="TOP">(FR)</TD>
+</TR>
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='av-joe';
+eadr+=unescape('%40');
+eadr+='libero.it';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT></TD>
+<TD VALIGN="TOP">(IT)</TD>
+</TR>
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='groz';
+eadr+=unescape('%40');
+eadr+='gryf.info';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT>,
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='prawdzik';
+eadr+=unescape('%40');
+eadr+='gmail.com';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT> </TD>
+<TD VALIGN="TOP">(PL)</TD>
+</TR>
+<TR>
+<TD VALIGN="TOP">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='lexlan';
+eadr+=unescape('%40');
+eadr+='gmx.ch';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT>,
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+var eadr='jm';
+eadr+=unescape('%40');
+eadr+='unimos.net';
+document.write('<'+'A HREF="mailto:'+eadr+'">'+eadr+'<'+'/A>');
+//--></SCRIPT></TD>
+<TD VALIGN="TOP">(PT)</TD>
+</TR>
+</TABLE>
+<NOSCRIPT>
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>Javascript is
+required to load the the start pages automatically during
+<A HREF="reset.html">Restart</A>.</TD>
+</TR>
+</TABLE></NOSCRIPT>
+<P><B>Tip</B>: Press
+<KBD STYLE="text-decoration: blink;">[F1]</KBD> or hover the mouse over
+one of the controls to bring up a short help text.</P>
+<H2 STYLE="padding-top: 4px;">Todo-List:</H2>
+<P>The
+following settings are required for a typical node.</P>
+<TABLE BORDER="1" CELLPADDING="1" CELLSPACING="0" CLASS="fixwidth">
+<TR>
+<TH>State</TH>
+<TH>Setting</TH>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get ff_pw)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="password.html">Password</A>:
+Password </TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get ff_adm_mail)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="address.html">Contact info</A>:
+Email</TD>
+</TR>
+<TR>
+<TD>$( ( test "static" = "$(nvram get wifi_proto)" || test "olsr" = "$(nvram get wifi_proto)" ) &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+WLAN Protocol = Static</TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get wifi_ipaddr)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+WLAN-IP Address</TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get wifi_netmask)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+WLAN Netmask </TD>
+</TR>
+<TR>
+<TD>$(test "$(nvram get wl0_mode)" != "ap" && test "$(nvram get wl0_infra)" != "1" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+WLAN Mode = Ad Hoc</TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get wl0_ssid)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>: ESSID </TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get ff_bssid)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>: BSSID </TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get wl0_channel)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>: Channel </TD>
+</TR>
+<TR>
+<TD>$(test "$(nvram get wl0_antdiv)" -ge 0 &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+RX Antenna != Auto</TD>
+</TR>
+<TR>
+<TD>$(if [ -z "$(nvram get wl0_frag)" ] || [ "$(nvram get wl0_frag)" -ge 2346 ];then echo '<IMG ALT="OK" SRC="../images/yes.gif">'; else echo '<IMG ALT="Not OK" SRC="../images/no.gif">';fi)</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+Fragmentation Threshold == 2346 </TD>
+</TR>
+<TR>
+<TD>$(if [ -z "$(nvram get wl0_rts)" ] || [ "$(nvram get wl0_rts)" -eq 2347 ];then echo '<IMG ALT="OK" SRC="../images/yes.gif">'; else echo '<IMG ALT="Not OK" SRC="../images/no.gif">';fi)</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+RTS Threshold == 2347 </TD>
+</TR>
+<TR>
+<TD>$(if [ "$(nvram get wl0_mrate)" -eq 5500000 ];then echo '<IMG ALT="OK" SRC="../images/yes.gif">'; else echo '<IMG ALT="Not OK" SRC="../images/no.gif">';fi)</TD>
+<TD><A HREF="wifi.html">Wireless</A>:
+Multicast Rate == 5.5 Megabit/s
+</TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get ff_adm_latlon)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="system.html">System</A>: GPS
+Position </TD>
+</TR>
+<TR>
+<TD>$(test -n "$(nvram get wan_hostname)" &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">')</TD>
+<TD><A HREF="system.html">System</A>:
+Host Name  </TD>
+</TR>
+<TR>
+<TD>
+EOF
+
+TOTMEM=$(grep MemTotal: /proc/meminfo|if read line;then set $line;echo $2;fi)
+install_todo=freifunk-ipv6
+if [ -z "$TOTMEM" ] || [ 8192 -lt $TOTMEM ]; then
+install_todo=freifunk-recommended-en
+fi
+grep -q $install_todo /usr/lib/ipkg/status &&
+echo '<IMG ALT="OK" SRC="../images/yes.gif">' ||
+echo '<IMG ALT="Not OK" SRC="../images/no.gif">'
+
+cat<<EOF
+</TD>
+<TD><A HREF="software1.html">Software
+1</A>: &quot;$install_todo&quot;</TD>
+</TR>
+</TABLE>
+EOF
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

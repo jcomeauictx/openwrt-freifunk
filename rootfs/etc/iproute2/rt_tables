@@ -1,0 +1,15 @@
+#
+# reserved values
+#
+255	local
+254	main
+253	default
+0	unspec
+#
+# local
+#
+222	olsr-main
+223	olsr-default
+224	olsr-tunnel
+225	olsr-fail
+226	ovpn

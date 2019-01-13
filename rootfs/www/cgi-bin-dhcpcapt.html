@@ -1,0 +1,68 @@
+#!/bin/sh
+
+export DATE="7.3.2008";SCRIPT=${0#/rom}
+export TITLE="Hello Guest!"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Hello Guest!</H1>
+<FORM ACTION="cgi-bin-dhcpcapt.html" METHOD="POST">
+EOF
+
+echo '<BASE HREF="http://'$(nvram get wifi_ipaddr)'" />'
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+
+cat<<EOF
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="formfixwidth">
+<TR
+TITLE="Enter your nickname (short, for IRC, chat etc.)">
+<TD>
+<P>This is a Freifunk
+access point with guest access. The guest access can be used to fetch
+emails and web sites for free if you accept the following conditions.
+Further informations are offered on the <A HREF="cgi-bin-index.html">main
+page of this device</A>.</P></TD>
+</TR>
+<TR
+TITLE="Enter your nickname (short, for IRC, chat etc.)">
+<TD>&nbsp;</TD>
+</TR>
+<TR
+TITLE="Enter your nickname (short, for IRC, chat etc.)">
+<TD><INPUT NAME="free" TYPE="CHECKBOX" VALUE="1"> My
+data transfers are unencrypted.</TD>
+</TR>
+<TR
+TITLE="Enter your nickname (short, for IRC, chat etc.)">
+<TD><INPUT NAME="fair" TYPE="CHECKBOX" VALUE="1"> I
+will behave fair with using this network.</TD>
+</TR>
+<TR>
+<TD>&nbsp;</TD>
+</TR>
+<TR>
+<TD ALIGN="CENTER"><INPUT NAME="post_adress" TITLE="Please accept, if you agree with the conditions." TYPE="SUBMIT" VALUE="Accept:"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+EOF
+
+else
+if [ "$QUERY_STRING" != "${QUERY_STRING#*free=1}" ] && [ "$QUERY_STRING" != "${QUERY_STRING#*fair=1}" ]; then
+echo ok
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>Conditions not accepted.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

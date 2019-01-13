@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Compat for old FFF (use get_netparam function instead)
+
+. /etc/functions.sh
+get_netparam
+set|egrep "^(LO|LAN|WAN|WIFI)(ADR|BRC|DEV|MSK|MTU|NET|PRE)="
+for i in LAN WAN WIFI;do
+	echo -n "${i}OLSR="
+	eval in_range \$${i}NET/\$${i}PRE && echo 1 || echo 0
+done

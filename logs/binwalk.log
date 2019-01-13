@@ -1,0 +1,12 @@
+
+Scan Time:     2013-07-19 16:23:32
+Signatures:    193
+Target File:   /media/sda3/Users/jc/Downloads/openwrt-freifunk-1.7.4-en.trx
+MD5 Checksum:  70dc8f69ec0fb626216ce4e772830066
+
+DECIMAL   	HEX       	DESCRIPTION
+-------------------------------------------------------------------------------------------------------
+0         	0x0       	TRX firmware header, little endian, header size: 28 bytes,  image size: 1343488 bytes, CRC32: 0x62C69275 flags/version: 0x10000
+28        	0x1C      	gzip compressed data, from Unix, NULL date: Wed Dec 31 16:00:00 1969, max compression
+474268    	0x73C9C   	Squashfs filesystem, little endian, version 2.1, size: 864480 bytes,  356 inodes, blocksize: 65536 bytes, created: Sun Aug 29 09:25:57 2010 
+

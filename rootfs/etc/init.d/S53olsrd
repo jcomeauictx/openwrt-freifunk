@@ -1,0 +1,436 @@
+#!/bin/sh
+
+case $FAILSAFE in "");;*)exit;;esac
+
+set_netparam()
+{
+	case $LODEV in "")
+		. /etc/functions.sh
+		get_netparam
+	;;esac
+}
+
+set_devices()
+{
+	local i=
+	set_netparam
+	OLSRDEV=
+	ff_iface=
+	ff_ip4broad=$(nvram get ff_ip4broad)
+	for i in \$WIFI \$WAN \$LAN;do eval '
+		case '$i'DEV in "");;*)if in_range '$i'NET/'$i'PRE;then
+			ff_iface=${ff_iface:+$ff_iface;}'$i'DEV${ff_ip4broad:+:$ff_ip4broad}
+		fi;;esac'
+	done
+	ff_iface=${ff_iface:+$ff_iface;}$(nvram get ff_iface)
+	sysctl -w net.ipv4.conf.all.send_redirects=0 >&-
+	case $ff_smartgw in yes)
+		# SmartGW server tunnel endpoint needs this
+		test -d /proc/sys/net/ipv4/conf/tunl0 || ip addr add dev tunl0 0.0.0.0/0
+		sysctl -w net.ipv4.conf.tunl0.rp_filter=0 >&-
+		for i in D I;do
+			# SmartGW client tunnel has always mtu < 1500
+			iptables -$i FORWARD -o tnl_+ -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>&-
+		done
+	;;esac
+	case $WIFIDEV in "");;*)
+		ff_mtu=$(nvram get ff_mtu)
+		case $ff_mtu in "");;*)if [ 1500 -gt $ff_mtu ]; then
+			ip link set dev $WIFIDEV mtu $ff_mtu
+			for i in D I; do
+				iptables -$i FORWARD -o $WIFIDEV -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>&-
+			done
+		fi;;esac
+	;;esac
+}
+
+write_config()
+{
+	local i=
+
+	ff_will=$(nvram get ff_will)
+	ff_fisheye=$(nvram get ff_fisheye)
+	ff_olsrspeed=$(nvram get ff_olsrspeed)
+	ff_olsrspeed=${ff_olsrspeed:-5}
+	ff_qoslev=$(nvram get ff_qoslev)
+	case "$ff_qoslev" in 0|1|2);;*)ff_qoslev=2;;esac
+
+	case $ff_fisheye in 0)
+		cover=3
+	;;*)
+		cover=7
+		ff_fisheye=1
+	;;esac
+
+	hystparm="UseHysteresis		no"
+	case $ff_qoslev in 0)
+		case $(nvram get ff_hyst) in yes)
+			hystparm="UseHysteresis		yes"
+		;;esac
+		ff_scale=$(nvram get ff_scale)
+		case $ff_scale in "");;*)
+			hystparm=$hystparm"
+HystScaling		$ff_scale"
+		;;esac
+		ff_thrh=$(nvram get ff_thrh)
+		case $ff_thrh in "");;*)
+			hystparm=$hystparm"
+HystThrHigh		$ff_thrh"
+		;;esac
+		ff_thrl=$(nvram get ff_thrl)
+		case $ff_thrl in "");;*)
+			hystparm=$hystparm"
+HystThrLow		$ff_thrl"
+		;;esac
+	;;esac
+
+	case $ff_will in "");;*)
+		hystparm=$hystparm"
+Willingness		$ff_will"
+	;;esac
+
+	# olsr_main=,olsr_default=
+	eval $(sed -n 's/^[[:space:]]*\([[:digit:]]\+\)[[:space:]]\+olsr-\(main\|default\|tunnel\)/olsr_\2=\1/p' /etc/iproute2/rt_tables)
+
+	plugins=
+	case $ff_policyrt in 1)
+		olsr_default=$olsr_main
+	;;*)
+		plugins=$plugins'
+LoadPlugin "olsrd_dyn_gw_plain.so.0.4"
+{
+}
+'
+		unset olsr_main
+	;;esac
+
+	case $(nvram get ff_arprefresh) in 0);;*)
+		plugins=$plugins'
+LoadPlugin "olsrd_arprefresh.so.0.1"
+{
+}
+'
+	;;esac
+
+	case $(nvram get ff_txtinfo) in 0);;*)
+		plugins=$plugins'
+LoadPlugin "olsrd_txtinfo.so.0.1"
+{
+	PlParam	"Accept" "127.0.0.1"
+}
+'
+	;;esac
+
+	case $(ls /usr/lib/olsrd_bmf.so.* 2>&-) in "");;*)case $(nvram get ff_bmf) in 0);;*)
+		insmod tun >&- 2>&1
+		plugins=$plugins'
+LoadPlugin "'$(echo /usr/lib/olsrd_bmf.so.*|sed -e's#.*/##')'"
+{
+}
+'
+	;;esac;;esac
+
+	wan_hostname=$(nvram get wan_hostname)
+	case $wan_hostname in "");;*)case $(nvram get ff_nameservice) in 0);;*)
+		plugins=$plugins'
+LoadPlugin "olsrd_nameservice.so.0.3"
+{
+	PlParam	"name"		"'$wan_hostname'"
+	PlParam	"hosts-file"	"/var/etc/hosts"
+	PlParam	"suffix"	".olsr"
+	PlParam	"interval"	"180"
+	PlParam	"timeout"	"3600"'
+		ff_adm_latlon="$(nvram get ff_adm_latlon)"
+		case $ff_adm_latlon in "");;*)
+			IFS=\;\:\,
+			set -- $ff_adm_latlon
+			case $1 in "");;*)case $2 in "");;*)
+				echo "$1,$2" > /var/run/latlon.txt
+				plugins=$plugins'
+	PlParam "latlon-infile"	"/var/run/latlon.txt"
+	PlParam "latlon-file"	"/var/run/latlon.js"'
+			;;esac;;esac
+			unset IFS
+		;;esac
+		IFS=\;
+		for i in $(nvram get ff_service); do
+			plugins=$plugins'
+	PlParam "service"	"'$i'"'
+		done
+		unset IFS
+		plugins=$plugins'
+}
+'
+	;;esac;;esac
+
+	cat>/var/etc/olsrd.conf<<EOF
+# Note: freifunk-olsrd denies 192.168.1.1. Please: Wifi-IP != 192.168.0.0/16!
+DebugLevel		0
+IpVersion		4
+AllowNoInt		yes
+FIBMetric		"flat"
+Pollrate		0.025
+TcRedundancy		2
+NatThreshold		0.75
+MprCoverage		$cover
+LinkQualityLevel	$ff_qoslev
+LinkQualityFishEye	$ff_fisheye
+LinkQualityAlgorithm	"etx_ff"
+$hystparm
+RtTablePriority		none
+RtTableDefaultOlsrPriority none
+RtTableTunnelPriority	none
+RtTableDefaultPriority	none
+RtTable			${olsr_main:-254}
+RtTableDefault		${olsr_default:-254}
+RtTableTunnel		${olsr_tunnel:-auto}
+SmartGateway		${ff_smartgw:-no}
+$plugins
+EOF
+
+	ff_hna4=$(nvram get ff_hna4)
+	case $(nvram get ff_wldhcp_hna4) in 1)
+		IFS=\;
+		for i in $(nvram get ff_wldhcp); do
+			local net=${i%[:,]*}
+			ff_hna4="${ff_hna4}${ff_hna4:+;}${net}"
+		done
+		unset IFS
+	;;esac
+
+	IFS=\;
+	for i in $(nvram get ff_dmz); do
+		local ip=${i%[:,]*}
+		ff_hna4="${ff_hna4}${ff_hna4:+;}${ip}/32"
+	done
+	unset IFS
+
+	case $ff_hna4 in "");;*)
+		hna4=
+		IFS=\;
+		for i in $ff_hna4; do
+			case ${i##*/*} in "")
+			hna4=$hna4'  '$(ipcalc -n $i|cut -d'=' -f2)' '$(ipcalc -m $i|cut -d'=' -f2)'
+'
+			;;esac
+		done
+		unset IFS
+		cat>>/var/etc/olsrd.conf<<EOF
+Hna4
+{
+$hna4
+}
+EOF
+	;;esac
+
+	mults=
+	IFS=\;
+	for i in $(nvram get ff_lqmult); do
+		local ip=${i%[:,]*}
+		local lq=${i#*[:,]}
+		case $ip in "");;*)case $lq in $i|"");;*)
+			mults=$mults"	LinkQualityMult		$ip $lq
+"
+		;;esac;;esac
+	done
+	unset IFS
+
+	IFS=\;
+	for i in $ff_iface; do
+		local parm=$mults
+		local hlotm=$(( ff_olsrspeed / 2 + 1 ))
+		local tc_tm=$(( ff_olsrspeed * 2 ))
+		local midtm=$(( ff_olsrspeed * 5 ))
+		local hnatm=$(( ff_olsrspeed * 2 ))
+		local iface=${i%[:,]*}
+		local bcast=${i#*[:,]}
+		case $ff_fisheye in 0);;*)
+			tc_tm=$(( ff_olsrspeed / 2 ))
+			case tc_tm in 0)tc_tm=1;;esac
+		;;esac
+		case $iface in "")
+			continue
+		;;tun*|tap*)
+			hlotm=$(( hlotm * 5 ))
+			tc_tm=$(( tc_tm * 5 ))
+			midtm=$(( midtm * 2 ))
+			hnatm=$(( hnatm * 2 ))
+		;;esac
+		case $bcast in $i|"");;*)
+			parm=$parm"	Ip4Broadcast		$bcast
+"
+		;;esac
+		if test -f /etc/local.olsrd.conf.$iface;then
+			parm=$parm"$(cat /etc/local.olsrd.conf.$iface)
+"
+		fi
+		# Allow e.g. icmp via 192.168.1.1(gw)->mesh->192.168.1.1(you)
+		test -d /proc/sys/net/ipv4/conf/$iface || ip addr add dev $iface 0.0.0.0/0
+		sysctl -w net.ipv4.conf.$iface.rp_filter=0 >&-
+		cat>>/var/etc/olsrd.conf<<EOF
+Interface "$iface"
+{
+	HelloInterval		$hlotm.0
+	HelloValidityTime	$(( ff_olsrspeed * 25 )).0
+	TcInterval		$tc_tm.0
+	TcValidityTime		$(( ff_olsrspeed * 100 )).0
+	MidInterval		$midtm.0
+	MidValidityTime		$(( ff_olsrspeed * 100 )).0
+	HnaInterval		$hnatm.0
+	HnaValidityTime		$(( ff_olsrspeed * 25 )).0
+$parm}
+
+EOF
+	done
+	unset IFS
+
+	for i in /etc/local.olsrd.conf /etc/local.olsrd.conf-*; do
+		test -f $i && cat>>/var/etc/olsrd.conf<$i
+	done
+}
+
+rules_policy()
+{
+	local i=
+	set_netparam
+	for i in \$LAN \$WAN \$WIFI;do eval '
+		case '$i'DEV in "");;*)if in_range '$i'NET/'$i'PRE;then
+			ip rule $1 iif '$i'DEV table olsr-main
+		fi;;esac'
+	done
+	IFS=\;\:\,
+	for i in $FF_RANGE;do
+		ip rule $1 to $i table olsr-main
+	done
+	unset IFS
+	ip rule $1 table olsr-main priority $(( 0xffff ))
+}
+
+rules_normal()
+{
+	local i=
+	ff_ping="$(nvram get ff_ping)"
+	case $ff_ping in "")
+		ip rule $1 iif lo table olsr-fail priority $(( 0x8000 ))
+	;;*)
+		IFS=\,\:\;
+		for i in $ff_ping; do
+			ip rule $1 to $i iif lo table olsr-fail priority $(( 0x8000 ))
+		done
+		unset IFS
+	;;esac
+	ip rule $1 table olsr-default priority $(( 0xffff ))
+}
+
+rules_smartgw()
+{
+	local i=
+	case $ff_smartgw in yes)
+		set_netparam
+		for i in \$LO \$LAN \$WAN \$WIFI;do eval '
+			case '$i'DEV in "");;*)if ! in_range '$i'NET/'$i'PRE;then
+				ip rule $1 iif '$i'DEV table olsr-tunnel priority $(( 0x8001 ))
+			fi;;esac'
+		done
+	;;esac
+	ip route flush cache
+}
+
+set_rules()
+{
+	local i=
+	case $ff_policyrt in 1)
+		rules_policy add
+		ip route flush table olsr-main 2>&-
+		ip -f inet route list proto kernel|while read i;do
+			set -- $i
+			ip route add throw $1 table olsr-main
+		done
+	;;*)
+		rules_normal add
+	;;esac
+	rules_smartgw add
+}
+
+clear_rules()
+{
+	case $ff_policyrt in 1)
+		rules_policy del
+		ip route flush table olsr-main 2>&-
+	;;*)
+		rules_normal del
+		rm -f /var/run/dyngw.hyst
+		eval $(ip -f inet route list|sed -ne'/ metric [0-9]\+ *$/{s/.*/ip route del &;/;p;}')
+		set -- $(ip -f inet route list exact 0/0 table olsr-fail)
+		case $2 in via)ip route add default via $3 2>&-;;esac
+		ip route flush table olsr-fail 2>&-
+	;;esac
+	rules_smartgw del
+}
+
+start()
+{
+	echo "Starting olsrd..."
+	set_devices
+	write_config
+	set_rules
+	test -f /var/etc/olsrd-release || {
+		sh -c "olsrd -f /dev/null --version 2>&-"|sed -n 's/^ *\*\*\* olsr.org - \([^ ]\+\).*/\1/p;s/^.*date:\+/Date:/p'>/var/etc/olsrd-release
+	}
+	# Note: >&- does not work!
+	olsrd -f /var/etc/olsrd.conf -d 0 >/dev/null
+}
+
+stop()
+{
+	echo "Stopping olsrd..."
+	pids=
+	for i in $(pidof olsrd);do
+		egrep -q '\b/var/etc/olsrd-ipv6.conf\b' /proc/$i/cmdline || pids="${pids}${pids:+ }${i}"
+	done
+	case $pids in "");;*)
+		kill $pids
+		sleep 1
+	;;esac
+	clear_rules
+}
+
+lockpid() {
+	# command, pidfile
+	local pid=$(cat $2 2>&-)
+	case $pid in "");;*)
+		case $(sed -n '2{s#.*/##;p}' /proc/$pid/cmdline 2>&-) in $1)
+			echo "$1 already running." >&2
+			exit 1
+		;;*)
+			rm -f $2
+		;;esac
+	;;esac
+	echo $$ > $2
+}
+
+ff_smartgw=
+case $(nvram get ff_smartgw) in 1)ff_smartgw=yes;;esac
+ff_policyrt=$(nvram get ff_policyrt)
+test -d /var/etc || mkdir -p /var/etc
+test -d /var/run || mkdir -p /var/run
+pidfile=/var/run/${0##*/}.pid
+lockpid ${0##*/} $pidfile
+
+case $1 in
+	start)
+		start
+	;;
+	stop)
+		stop
+	;;
+	restart)
+		stop
+		start
+	;;
+	*)
+		echo "Usage: $0 start|stop|restart"
+	;;
+esac
+
+rm -f $pidfile

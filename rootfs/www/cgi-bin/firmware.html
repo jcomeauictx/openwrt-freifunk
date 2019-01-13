@@ -1,0 +1,192 @@
+#!/bin/sh
+
+export DATE="14.9.2008";SCRIPT=${0#/rom}
+export TITLE="Admin: Firmware"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: Firmware</H1>
+EOF
+
+if [ "(ro)" = "$(mount|grep " / "|if read line; then set $line;echo $6;fi)" ]; then
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+
+cat<<EOF
+<FORM ACTION="firmware.html" ENCTYPE="multipart/form-data" METHOD="POST">
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="form"
+TITLE="Choose a firmware file specific for this device. If you want to upload the Freifunk firmware, a *.bin file as well as a *.trx file can be uploaded. For other firmware types, you should upload the original *.bin file." border="0">
+<TR>
+<TD>Firmware
+file:</TD>
+</TR>
+<TR>
+<TD><INPUT NAME="firmfile" SIZE="32" TYPE="FILE" VALUE="Browse..."></TD>
+</TR>
+<TR>
+<TD>&nbsp;</TD>
+</TR>
+<TR>
+<TD><INPUT NAME="post_firm" TITLE="Upload the specified firmware file. The firmware file will be 'burned' to the flash memory of the device immediately." VALUE="Upload firmware" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." value="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+<P><B>Attention</B>: If you start
+the device, it will listen on the IP address 192.168.1.1 for approx. 5&nbsp;seconds
+for a firmware upload via TFTP. If the uploaded firmware is dysfunctional,
+the devices can be restored using this mechanism. Connect the PC to the
+device using one of the network jacks [1-4]. You can used crossed network
+leads as well as straight (uncrossed) network leads.</P>
+<H2>Windows XP</H2>
+<OL>
+<LI>Log in to the PC
+as administrator.</LI>
+<LI>In the <B>Network connections</B>
+window bring up the <B>Properties of LAN connection</B> dialog. Change
+the settings for the <B>TCP/IP internet protocol</B>.</LI>
+<LI>Change the IP address
+to <CODE>192.168.1.2</CODE>. Accept the default netmask of <CODE>255.255.255.0</CODE>.
+Leave other settings on their current values.</LI>
+<LI>Call
+up <B>Start</B>: <B>Programs</B>: <B>Accessories</B>: <B>Command
+Prompt</B>. Change to the directory containing the desired firmware file
+with the <CODE>cd</CODE> command. Example: Enter <CODE>cd /d
+x:\download\firmware</CODE> and confirm with the enter key.</LI>
+<LI>Enter
+the TFTP upload command but do not confirm with enter. Example: <CODE>tftp
+-i 192.168.1.1 put openwrt-g-freifunk-%VERSION%-en.bin</CODE></LI>
+</OL>
+<P>Read
+on under <A HREF="#fwtrs">Upload Firmware</A> (see below).</P>
+<H2>Linux</H2>
+<OL>
+<LI>Open a root shell.</LI>
+<LI>Change
+to the directory containing the desired firmware file with the <CODE>cd</CODE>
+command. Example: Enter <CODE>cd /tmp/download/firmware</CODE> and
+confirm with the enter key.</LI>
+<LI>
+Configure
+the connected network interface. Example: <CODE>ifconfig eth0
+192.168.1.2</CODE>
+</LI>
+<LI>
+Call
+up the TFTP program. Enter <CODE>tftp 192.168.1.1</CODE>. On the TFTP
+command prompt, you need to enter two successive commands. Enter <CODE>binary</CODE>
+and <CODE>rexmt&nbsp;1</CODE>
+</LI>
+<LI>Enter
+the TFTP upload command but do not confirm with the enter key. Example:
+<CODE>put openwrt-g-freifunk-%VERSION%-en.bin</CODE> </LI>
+</OL>
+<H2><A NAME="fwtrs">Upload Firmware</A></H2>
+<P>The network
+jack of the PC is normally equipped with a connection LED. The LED will
+light up if the network connection is up. After switching on the device,
+this LED should light up after a few seconds. On the device itself, one of
+the four LEDs should light up after some seconds also. This behavior can
+be verified by removing and reinserting the mains plug of the device.
+After this test do the following steps:</P>
+<OL>
+<LI>Remove the mains plug.</LI>
+<LI>Reinsert the
+mains plug.</LI>
+<LI>Wait for approx. 2&nbsp;seconds
+until the network LEDs light up</LI>
+<LI>Wait for another 1-2&nbsp;seconds.</LI>
+<LI>Confirm the TFTP upload
+command with the enter key.</LI>
+</OL>
+<P>The upload should be
+finished after approx. 5&nbsp;seconds without errors. The devices is
+signaling the update process by blinking the power LED. The update process
+should be finished after 2&nbsp;minutes at the latest. The device will
+startup the new firmware automatically.</P>
+EOF
+
+elif ! ffout=$(./freifunk-upload 2>&1); then
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>$ffout</TD>
+</TR>
+</TABLE>
+<P>The
+firmware upload was aborted.</P>
+EOF
+
+elif [ -n "$ffout" ]; then
+BINMAGIC=$(dd if="$ffout" bs=4 count=1 2>/dev/null)
+case "$BINMAGIC" in
+W54G|W54S|W54A|W54s|LOAD|HDR0)
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>Writing
+the $ffout firmware file to flash memory. Please wait...</TD>
+</TR>
+</TABLE><IMG
+ALT="170 seconds..."
+HEIGHT="8" SRC="../images/progress170.gif" VSPACE="10" WIDTH="255" TITLE="170 seconds...">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+setTimeout("location.href=('192.168.1.1'==location.hostname?'http://$(nvram get lan_ipaddr)/':'/')", 170000);
+//--></SCRIPT>
+EOF
+
+echo -n "<PRE>"
+firmware-burn "$ffout"
+echo "</PRE>"
+;;
+*)
+rm -f "$ffout"
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>Firmware
+file has wrong header.</TD>
+</TR>
+</TABLE>
+<P>Please upload a
+suitable *.bin or *.trx firmware file.</P>
+EOF
+
+;;
+esac
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>No firmware file
+received.</TD>
+</TR>
+</TABLE>
+<P>Firmware
+upload was cancelled.</P>
+EOF
+
+fi
+else
+
+cat<<EOF
+<P>A
+new firmware can be uploaded only in failsafe or read-only mode. On the
+<A HREF="reset.html">Restart</A> page activate the desired option and
+confirm with <CITE>Restart</CITE>. Upload the firmware on this page after
+the restart.</P>
+<P><B>Explanation</B>:
+The OpenWRT command <CITE>mtd</CITE> will possible overwrite the
+read-write partition <CITE>OpenWrt</CITE>. In failsafe mode, this
+partition is not used. In read-only mode, this partition will be mounted
+read-only. The following partitions exist:</P>
+<PRE>$(cat /proc/mtd)</PRE>
+EOF
+
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

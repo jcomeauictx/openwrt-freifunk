@@ -1,0 +1,189 @@
+#!/bin/sh
+
+export DATE="12.4.2010";SCRIPT=${0#/rom}
+export TITLE="Admin: Restart"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: Restart</H1>
+EOF
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+ff_firmware=
+if ! grep -q ff_reset /rom/etc/preinit /etc/preinit>/dev/null 2>&1; then
+ff_firmware='" DISABLED="DISABLED'
+fi
+
+cat<<EOF
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+function validate(obj) {
+for(var i = 0; i < obj.ff_reset.length; i++) {
+if ('format' == obj.ff_reset[i].value) {
+if (obj.ff_reset[i].checked) {
+var ask = 'Formatting? Enter OK.';
+if ('en'=='de') ask = 'Formatieren? OK eingeben.';
+if ('en'=='fr') ask = 'Formatage? Taper OK.';
+if ('en'=='pt') ask = 'Formatar? Clique OK.';
+return 'OK' == prompt(ask, '');
+}
+}
+if ('killnvram' == obj.ff_reset[i].value) {
+if (obj.ff_reset[i].checked) {
+var ask = 'Completely erase NVRAM? May brick the device! Enter OKOK.';
+if ('en'=='de') ask = 'NVRAM komplett löschen? Dies kann eine Reparatur nötig machen! OKOK eingeben.';
+if ('en'=='fr') ask = 'Effacer Compl&egrave;tement la NVRAM ? Attention cela peut transmuer votre AP &agrave; l'+"'"+'&eacute;tat de brique ! Taper OKOK.';
+if ('en'=='pt') ask = 'Apagar completamente a NVRAM? Cuidado com esta opera&ccedil;&atilde;o pois poder&aacute; inutilizar o equipamento! Clique OKOK.';
+return 'OKOK' == prompt(ask, '');
+}
+}
+}
+return true;
+}
+--></SCRIPT>
+<FORM ACTION="reset.html" NAME="resetform" METHOD="POST">
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="formfixwidth">
+<TR
+TITLE="Restart the device to activate changed settings. Removing and reinserting the mains plug will have the same effect.">
+<TD><INPUT CHECKED="checked" CLASS="radio" NAME="ff_reset" TYPE="RADIO" VALUE="$(nvram get ff_reset)"></TD>
+<TD>Normal restart</TD>
+</TR>
+<TR
+TITLE="Restart the device in failsafe mode. To connect to the device, only the 'telnet' program can be used. If necessary, quit the failsafe mode by removing and reinserting the mains plug. The failsafe mode ends automatically after one hour.">
+<TD><INPUT CLASS="radio" NAME="ff_reset" TYPE="RADIO" VALUE="failsafe$ff_firmware"></TD>
+<TD>Restart in failsafe mode</TD>
+</TR>
+<TR
+TITLE="During the restart the root file system will be mounted read-only. In this mode file changes are possible in the /tmp directory only.">
+<TD><INPUT CLASS="radio" NAME="ff_reset" TYPE="RADIO" VALUE="readonly$ff_firmware"></TD>
+<TD>Restart
+in read-only mode (for firmware update)</TD>
+</TR>
+<TR
+TITLE="During the restart the JFFS2 partition (the 'hard drive') will be formatted. After formatting, the partition contents will be initialised to the firmware defaults. User modifications ore add-on software are lost. NVRAM settings, such as IP address or contact information will stay intact.">
+<TD><INPUT CLASS="radio" NAME="ff_reset" TYPE="RADIO" VALUE="format$ff_firmware"></TD>
+<TD>Restart
+with initializing (&quot;Format hard disk/JFFS2&quot;, Duration: 2&nbsp;minutes)
+EOF
+
+if [ '"nvram"' = "$(grep mtd3: /proc/mtd|if read line; then set $line;echo $4;fi)" ]; then
+
+cat<<EOF
+</TD>
+</TR>
+<TR
+TITLE="This option will completely erase all NVRAM settings! The device will restart using the boot loader (CFE) defaults. For this reason, the next restart will also initialise the JFFS2 partition. If the device does not restart automatically, you need to enforce a restart by pulling the plug!">
+<TD><INPUT CLASS="radio" NAME="ff_reset" TYPE="RADIO" VALUE="killnvram"></TD>
+<TD>Restart with the boot loader
+defaults. This option is tested only for these devices: Linksys WRT54G +
+WRT54GS! For the Siemens SE505 manually save the et0macaddr and
+il0macaddr NVRAM variables to restore them afterwards.
+EOF
+
+fi
+
+cat<<EOF
+</TD>
+</TR>
+<TR>
+<TD COLSPAN="2">&nbsp;<INPUT NAME="boot_wait" TYPE="HIDDEN" VALUE="on"></TD>
+</TR>
+<TR>
+<TD COLSPAN="2" NOWRAP="nowrap"><INPUT NAME="post_reset" ONCLICK="return validate(document.resetform);" TITLE="Restart the device with the activated option." VALUE="Restart" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." VALUE="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+EOF
+
+if [ "$(nvram get boot_wait)" != "on" ]; then
+
+cat<<EOF
+<P><B>Please note</B>: The <CODE>boot_wait</CODE>
+config setting has an actual value of &quot;$(nvram get boot_wait)&quot;.
+To open up the possibility to upload a new firmware via TFTP, the restart
+will change this setting to &quot;on&quot;.</P>
+EOF
+
+fi
+if [ -n "$ff_firmware" ]; then
+
+cat<<EOF
+<P><B>Attention</B>:
+The extended restart options are active with the Freifunk firmware only.</P>
+EOF
+
+fi
+else
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+DIRTY=
+if [ -n "$post_reset" ]; then
+if [ "$ff_reset" = "killnvram" ]; then
+if [ '"nvram"' = "$(grep mtd3: /proc/mtd|if read line; then set $line;echo $4;fi)" ]; then
+mtd erase /dev/mtd/3
+fi
+else
+for V in ff_reset boot_wait; do
+eval "C=\$$V"
+C=$(httpd -d "$C")
+if [ "$C" != "$(nvram get $V)" ]; then
+DIRTY=1
+nvram set $V="$C"
+fi
+done
+test -n "$DIRTY" && nvram commit>/dev/null 2>&1
+fi
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>The device is restarting
+now. Please wait...</TD>
+</TR>
+</TABLE>
+EOF
+
+if [ "$ff_reset" = "failsafe" ]; then
+
+cat<<EOF
+<IMG
+ALT="51 seconds..."
+HEIGHT="8" SRC="../images/progress51.gif" VSPACE="10" WIDTH="255" TITLE="51 seconds...">
+<P><B>Tip</B>:
+In failsafe mode, the IP address of the device is always <CODE>192.168.1.1</CODE>.
+While you wait for the device to come up again, the network card can be
+configured to the appropriate IP address, for example to <CODE>192.168.1.2</CODE>.
+</P>
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+setTimeout("location.href='http://192.168.1.1/'", 51000);
+//--></SCRIPT>
+EOF
+
+elif [ "$ff_reset" = "format" ] || [ "$ff_reset" = "killnvram" ]; then
+
+cat<<EOF
+<IMG
+ALT="136 seconds..."
+HEIGHT="8" SRC="../images/progress136.gif" VSPACE="10" WIDTH="255" TITLE="136 seconds...">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+setTimeout("location.href=('192.168.1.1'==location.hostname?'http://$(nvram get lan_ipaddr)/':'/')", 136000);
+//--></SCRIPT>
+EOF
+
+else
+
+cat<<EOF
+<IMG
+ALT="51 seconds..."
+HEIGHT="8" SRC="../images/progress51.gif" VSPACE="10" WIDTH="255" TITLE="51 seconds...">
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+setTimeout("location.href=('192.168.1.1'==location.hostname?'http://$(nvram get lan_ipaddr)/':'/')", 51000);
+//--></SCRIPT>
+EOF
+
+fi
+sh -c "sleep 2;reboot">/dev/null 2>&1 &
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

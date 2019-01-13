@@ -1,0 +1,426 @@
+#!/bin/sh
+
+export DATE="18.4.2010";SCRIPT=${0#/rom}
+export TITLE="Admin: Wireless"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: Wireless</H1>
+EOF
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+#Speedups
+wifi_proto="$(nvram get wifi_proto)"
+test "olsr" = "$wifi_proto" && wifi_proto=static
+wl0_antdiv="$(nvram get wl0_antdiv)"
+wl0_txant="$(nvram get wl0_txant)"
+wl0_gmode="$(nvram get wl0_gmode)"
+wl0_rateset="$(nvram get wl0_rateset)"
+wl0_rate="$(nvram get wl0_rate)"
+wl0_mrate="$(nvram get wl0_mrate)"
+wl0_closed="$(nvram get wl0_closed)"
+ff_noprobe="$(nvram get ff_noprobe)"
+wl0_phytype="$(nvram get wl0_phytype)"
+if [ "$(nvram get wl0_mode)" = "ap" ]; then
+wmode=master
+elif [ "$(nvram get wl0_infra)" = "1" ]; then
+wmode=client
+else
+wmode=ad-hoc
+fi
+
+cat<<EOF
+<FORM ACTION="wifi.html" METHOD="POST" NAME="wifiform"><TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0"
+CLASS="form"><TR
+TITLE="Determines the IP address configuration mode for the WLAN device.">
+<TD>WLAN
+Protocol:</TD><TD><SELECT NAME="wifi_proto" ONCHANGE="this.form.wifi_ipaddr.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.wifi_netmask.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.wifi_gateway.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));" STYLE="width: 100%;">
+<OPTION
+VALUE='dhcp' $(test "$wifi_proto" = "dhcp" && echo "selected=selected")>Query DHCP
+server</OPTION>
+<OPTION
+VALUE='static' $(test "$wifi_proto" = "static" && echo "selected=selected")>Static</OPTION>
+<OPTION
+VALUE='disabled' $(test "$wifi_proto" = "disabled" && echo "selected=selected")>Disabled</OPTION>
+</SELECT> </TD>
+</TR><TR
+TITLE="Enter a valid IP address. Within a network, an address must be unique. Examples: 172.16.1.1 or 104.255.255.254">
+<TD>WLAN-IP
+Address:</TD>
+<TD><INPUT NAME="wifi_ipaddr" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wifi_ipaddr)"$(if [ "$wifi_proto" != "static" ] && [ "$wifi_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="The netmask is a bit pattern. The netmask determines which IP addresses are to be reached locally. All IP packet not matching the netmask are forwarded to the default route. Examples: 255.240.0.0 or 255.0.0.0">
+<TD>WLAN
+Netmask:</TD><TD><INPUT NAME="wifi_netmask" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wifi_netmask)"$(if [ "$wifi_proto" != "static" ] && [ "$wifi_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="Default route for WLAN. This setting is normally left blank">
+<TD>WLAN
+Default Route:</TD><TD><INPUT NAME="wifi_gateway" SIZE="32" TYPE="TEXT" VALUE="$(nvram get wifi_gateway)"$(if [ "$wifi_proto" != "static" ] && [ "$wifi_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR
+TITLE="Determines the IP address configuration mode for the WLAN device.">
+<TD>WLAN
+Mode:</TD>
+<TD><SELECT NAME="wmode" STYLE="width: 100%;">
+<OPTION
+VALUE='master' $(test "$wmode" = "master" && echo "selected=selected")>Master (Access
+Point)</OPTION>
+<OPTION
+VALUE='client' $(test "$wmode" = "client" && echo "selected=selected")>Managed (Client)</OPTION>
+<OPTION
+VALUE='ad-hoc' $(test "$wmode" = "ad-hoc" && echo "selected=selected")>Ad Hoc (Peer to
+Peer)</OPTION></SELECT> </TD>
+</TR><TR
+TITLE="The ESSID determines the wireless network the access point is connected to. All nodes have to use the same ESSID.">
+<TD>ESSID:</TD>
+<TD><INPUT NAME="wl0_ssid" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wl0_ssid)"></TD>
+</TR><TR
+TITLE="The BSSID (for example '02:ca:ff:ee:ba:be') may stabilize Ad Hoc networks. All nodes have to use the same BSSID.">
+<TD>BSSID:</TD>
+<TD><INPUT NAME="ff_bssid" SIZE="48" TYPE="TEXT" VALUE="$(nvram get ff_bssid)"$(test -f /var/run/wifi.pid && echo ' disabled="disabled"')></TD>
+</TR>
+<TR
+TITLE="Enter a cannel number from 1 to 13. In some countries the channels 12 and 13 are restricted. In Japan even channel 14 can be used.">
+<TD>Channel:</TD>
+<TD><INPUT NAME="wl0_channel" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wl0_channel)"></TD>
+</TR><TR
+TITLE="If a Broadcom A mode card is installed, this option will switch on the 802.11b/g support.">
+<TD>Card
+Type:</TD><TD><INPUT CLASS="radio" NAME="wl0_phytype" TYPE="RADIO" VALUE="a"$(if [ "$wl0_phytype" = "a" ];then echo ' checked="checked"';fi)>802.11a&nbsp;
+<INPUT CLASS="radio" NAME="wl0_phytype" TYPE="RADIO" VALUE="g"$(if [ "$wl0_phytype" = "g" ];then echo ' checked="checked"';fi)>802.11b/g</TD>
+</TR><TR
+TITLE="Determines the receiving antenna.">
+<TD>RX
+Antenna:</TD><TD><INPUT CLASS="radio" NAME="wl0_antdiv" TYPE="RADIO" VALUE="-1"$(if [ "$wl0_antdiv" = "-1" ];then echo ' checked="checked"';fi)>Auto&nbsp;
+<INPUT CLASS="radio" NAME="wl0_antdiv" TYPE="RADIO" VALUE="0"$(if [ "$wl0_antdiv" = "0" ];then echo ' checked="checked"';fi)>Antenna
+A&nbsp;
+<INPUT CLASS="radio" NAME="wl0_antdiv" TYPE="RADIO" VALUE="1"$(if [ "$wl0_antdiv" = "1" ];then echo ' checked="checked"';fi)>Antenna
+B</TD>
+</TR><TR
+TITLE="Determines the sending antenna.">
+<TD>TX
+Antenna:</TD><TD><INPUT CLASS="radio" NAME="wl0_txant" TYPE="RADIO" VALUE="-1"$(if [ -z "$wl0_txant" ] || [ "$wl0_txant" = "-1" ];then echo ' checked="checked"';fi)>Auto&nbsp;
+<INPUT CLASS="radio" NAME="wl0_txant" TYPE="RADIO" VALUE="0"$(if [ "$wl0_txant" = "0" ];then echo ' checked="checked"';fi)>Antenna
+A&nbsp;
+<INPUT CLASS="radio" NAME="wl0_txant" TYPE="RADIO" VALUE="1"$(if [ "$wl0_txant" = "1" ];then echo ' checked="checked"';fi)>Antenna
+B</TD>
+</TR><TR
+TITLE="Changes the transmit power level (value from 1 to 96 qdbm). Activate 'Override' to get around the driver limit of 58 qdbm.">
+<TD>
+<TABLE BORDER="0" CELLPADDING="1" CELLSPACING="0"><TR><TD COLSPAN="2">TX
+Power:</TD>
+</TR><TR><TD COLSPAN="2"><INPUT TYPE="TEXT" NAME="wl0_txpwr" VALUE="$(nvram get wl0_txpwr)" SIZE="10"></TD>
+</TR><TR><TD VALIGN="MIDDLE">Override:</TD>
+<TD VALIGN="MIDDLE"><INPUT TYPE="CHECKBOX" NAME="ff_txpwroverride" VALUE="1"$(if [ "$(nvram get ff_txpwroverride)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+</TABLE>
+</TD><TD>
+<TABLE BORDER="1" CELLPADDING="1" CELLSPACING="0"><TR><TD>Regulatory
+Limit: </TD>
+<TD>
+<TABLE BORDER="0" CELLPADDING="0" CELLSPACING="0"><TR>
+<TD ROWSPAN="2" HEIGHT="8" VALIGN="MIDDLE"><INPUT TYPE="TEXT" NAME="regdbm" VALUE="20" STYLE="width:3em;" SIZE="5" ONCHANGE="set_mw()"></TD>
+<TD WIDTH="1" VALIGN="BOTTOM" HEIGHT="8"><IMG SRC="../images/up.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.regdbm.value=Math.floor(++document.wifiform.regdbm.value);set_mw()" ONDBLCLICK="document.wifiform.regdbm.value=Math.floor(++document.wifiform.regdbm.value);set_mw()"></TD>
+<TD ROWSPAN="2" HEIGHT="8" VALIGN="MIDDLE">&nbsp;dBm =
+<INPUT TYPE="TEXT" NAME="regmw" SIZE="5" VALUE="100" STYLE="width:3em;" ONCHANGE="set_dbm()"></TD>
+<TD HEIGHT="8" VALIGN="BOTTOM"><IMG SRC="../images/up.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.regmw.value++;set_dbm()" ONDBLCLICK="document.wifiform.regmw.value++;set_dbm()"></TD>
+<TD HEIGHT="8" VALIGN="MIDDLE" ROWSPAN="2">&nbsp;mW</TD>
+</TR><TR><TD WIDTH="1" VALIGN="TOP" HEIGHT="8"><IMG SRC="../images/dn.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.regdbm.value=Math.ceil(--document.wifiform.regdbm.value);set_mw()" ONDBLCLICK="document.wifiform.regdbm.value=Math.ceil(--document.wifiform.regdbm.value);set_mw()"></TD>
+<TD HEIGHT="8" VALIGN="TOP"><IMG SRC="../images/dn.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.regmw.value--;set_dbm()" ONDBLCLICK="document.wifiform.regmw.value--;set_dbm()"></TD>
+</TR>
+</TABLE></TD>
+</TR><TR><TD>Cable/Plug
+Loss: </TD><TD>
+<TABLE BORDER="0" CELLPADDING="0" CELLSPACING="0"><TR><TD HEIGHT="8"
+VALIGN="MIDDLE" ROWSPAN="2"><INPUT TYPE="TEXT" NAME="loss" VALUE="3" STYLE="width:3em;" SIZE="5" ONCHANGE="if(0>document.wifiform.loss.value)document.wifiform.loss.value=0;set_txpwr()"></TD>
+<TD HEIGHT="8" VALIGN="BOTTOM"><IMG SRC="../images/up.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.loss.value=Math.floor(++document.wifiform.loss.value);set_txpwr();" ONDBLCLICK="document.wifiform.loss.value=Math.floor(++document.wifiform.loss.value);set_txpwr();"></TD>
+<TD HEIGHT="8" VALIGN="MIDDLE" ROWSPAN="2">&nbsp;dB</TD>
+</TR><TR><TD HEIGHT="8" VALIGN="TOP"><IMG SRC="../images/dn.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.loss.value=Math.ceil(--document.wifiform.loss.value);if(0>document.wifiform.loss.value)document.wifiform.loss.value=0;set_txpwr();" ONDBLCLICK="document.wifiform.loss.value=Math.ceil(--document.wifiform.loss.value);if(0>document.wifiform.loss.value)document.wifiform.loss.value=0;set_txpwr();"></TD>
+</TR>
+</TABLE></TD>
+</TR><TR><TD>Antenna
+Gain: </TD><TD>
+<TABLE BORDER="0" CELLPADDING="0" CELLSPACING="0"><TR><TD HEIGHT="8"
+VALIGN="MIDDLE" ROWSPAN="2"><INPUT TYPE="TEXT" NAME="gain" VALUE="3" STYLE="width:3em;" SIZE="5" ONCHANGE="if(0>document.wifiform.gain.value)document.wifiform.gain.value=0;set_txpwr()"></TD>
+<TD HEIGHT="8" VALIGN="BOTTOM"><IMG SRC="../images/up.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.gain.value=Math.floor(++document.wifiform.gain.value);set_txpwr();" ONDBLCLICK="document.wifiform.gain.value=Math.floor(++document.wifiform.gain.value);set_txpwr();"></TD>
+<TD HEIGHT="8" VALIGN="MIDDLE" ROWSPAN="2">&nbsp;dBi</TD>
+</TR><TR><TD HEIGHT="8" VALIGN="TOP"><IMG SRC="../images/dn.gif" WIDTH="17" HEIGHT="8" ONCLICK="document.wifiform.gain.value=Math.ceil(--document.wifiform.gain.value);if(0>document.wifiform.gain.value)document.wifiform.gain.value=0;set_txpwr();" ONDBLCLICK="document.wifiform.gain.value=Math.ceil(--document.wifiform.gain.value);if(0>document.wifiform.gain.value)document.wifiform.gain.value=0;set_txpwr();"></TD>
+</TR>
+</TABLE></TD>
+</TR><TR><TD>Result:
+</TD><TD VALIGN="MIDDLE">
+<TABLE BORDER="0" CELLPADDING="0" CELLSPACING="0"><TR><TD HEIGHT="8"
+VALIGN="MIDDLE" ROWSPAN="2"><INPUT TYPE="TEXT" NAME="txpwr" VALUE="58" STYLE="width:3em;" SIZE="5" DISABLED="DISABLED">&nbsp;qdBm
+= <INPUT TYPE="TEXT" NAME="txmw" VALUE="100" STYLE="width:3em" SIZE="5" DISABLED="DISABLED">&nbsp;mW</TD>
+<TD HEIGHT="8" VALIGN="MIDDLE" ROWSPAN="2">&nbsp;&nbsp;<INPUT TYPE="SUBMIT" NAME="use" VALUE="<<<" ONCLICK="document.wifiform.wl0_txpwr.value=document.wifiform.txpwr.value;document.wifiform.ff_txpwroverride.checked=66<document.wifiform.wl0_txpwr.value;return false;"></TD>
+</TR><TR>
+</TR>
+</TABLE></TD>
+</TR>
+</TABLE>
+</TD>
+</TR><TR><TD>Distance (Meter):</TD><TD><INPUT NAME="wl0_distance" SIZE="32" TYPE="TEXT" VALUE="$(nvram get wl0_distance)"></TD>
+</TR><TR
+TITLE="If both G-devices as well as B-devices are present, you should use the default 'Mixed B/G'. The 'Disabled' setting will disable the WLAN device completely.">
+<TD>Radio
+Mode:</TD><TD><SELECT NAME="wl0_gmode" STYLE="width: 100%;">
+<OPTION VALUE='1' $(test "$wl0_gmode" = "1" && echo "selected=selected")>Mixed B/G</OPTION>
+<OPTION VALUE='0' $(test "$wl0_gmode" = "0" && echo "selected=selected")>B Mode Only</OPTION>
+<OPTION VALUE='2' $(test "$wl0_gmode" = "2" && echo "selected=selected")>G Mode Only</OPTION>
+<OPTION VALUE='4' $(test "$wl0_gmode" = "4" && echo "selected=selected")>G Mode Performance</OPTION>
+<OPTION VALUE='5' $(test "$wl0_gmode" = "5" && echo "selected=selected")>LRS</OPTION>
+<OPTION
+VALUE='-1' $(test "$wl0_gmode" = "-1" && echo "selected=selected")>Disable</OPTION></SELECT> </TD>
+</TR><TR
+TITLE="Broadcasting the (E)SSID can be disabled to enhance security. However, within the OLSR network this setting should be enabled.">
+<TD>Broadcast (E)SSID:</TD><TD><INPUT CLASS="radio" NAME="wl0_closed" TYPE="RADIO" VALUE="0"$(if [ "$wl0_closed" = "0" ];then echo ' checked="checked"';fi)>Enable
+&nbsp; <INPUT CLASS="radio" NAME="wl0_closed" TYPE="RADIO" VALUE="1"$(if [ "$wl0_closed" = "1" ];then echo ' checked="checked"';fi)>Disable
+</TD>
+</TR><TR
+TITLE="Prevents the probe-storm on gatherings (congress, meeting with larger number of Freifunk nodes in one place). Defaults to enabled.">
+<TD>Ignore PROBE_REQ:</TD><TD><INPUT CLASS="radio" NAME="ff_noprobe" TYPE="RADIO" VALUE="1"$(if [ "$ff_noprobe" != "0" ];then echo ' checked="checked"';fi)>Enable
+&nbsp; <INPUT CLASS="radio" NAME="ff_noprobe" TYPE="RADIO" VALUE="0"$(if [ "$ff_noprobe" = "0" ];then echo ' checked="checked"';fi)>Disable
+</TD>
+</TR><TR
+TITLE="The basic rate should follow the active WLAN mode (this is the default). For older B-devices, the basic rate may be set to '1-2 Mbps' for compatibility.">
+<TD>Basic
+Rate:</TD>
+<TD><SELECT NAME="wl0_rateset" STYLE="width: 100%;">
+<OPTION VALUE="default">Default</OPTION>
+<OPTION
+VALUE='12' $(test "$wl0_rateset" = "12" && echo "selected=selected")>1-2 Mbps</OPTION>
+<OPTION
+VALUE='all' $(test "$wl0_rateset" = "all" && echo "selected=selected")>All Rates</OPTION></SELECT> </TD>
+</TR><TR
+TITLE="Changes the transmission rate (setting from 1 up to 54 megabit/s, default 'Auto'). The 'Auto' setting will determine the current optimum automatically.">
+<TD>Transmission
+Rate:</TD><TD><SELECT NAME="wl0_rate" STYLE="width: 100%;">
+<OPTION VALUE="0">Auto</OPTION>
+<OPTION
+VALUE='1000000' $(test "$wl0_rate" = "1000000" && echo "selected=selected")>1
+Megabit/s</OPTION>
+<OPTION
+VALUE='2000000' $(test "$wl0_rate" = "2000000" && echo "selected=selected")>2
+Megabit/s</OPTION>
+<OPTION
+VALUE='5500000' $(test "$wl0_rate" = "5500000" && echo "selected=selected")>5.5
+Megabit/s</OPTION>
+<OPTION
+VALUE='6000000' $(test "$wl0_rate" = "6000000" && echo "selected=selected")>6
+Megabit/s</OPTION>
+<OPTION
+VALUE='9000000' $(test "$wl0_rate" = "9000000" && echo "selected=selected")>9
+Megabit/s</OPTION>
+<OPTION
+VALUE='11000000' $(test "$wl0_rate" = "11000000" && echo "selected=selected")>11
+Megabit/s</OPTION>
+<OPTION
+VALUE='12000000' $(test "$wl0_rate" = "12000000" && echo "selected=selected")>12
+Megabit/s</OPTION>
+<OPTION
+VALUE='18000000' $(test "$wl0_rate" = "18000000" && echo "selected=selected")>18
+Megabit/s</OPTION>
+<OPTION
+VALUE='24000000' $(test "$wl0_rate" = "24000000" && echo "selected=selected")>24
+Megabit/s</OPTION>
+<OPTION
+VALUE='36000000' $(test "$wl0_rate" = "36000000" && echo "selected=selected")>36
+Megabit/s</OPTION>
+<OPTION
+VALUE='48000000' $(test "$wl0_rate" = "48000000" && echo "selected=selected")>48
+Megabit/s</OPTION>
+<OPTION
+VALUE='54000000' $(test "$wl0_rate" = "54000000" && echo "selected=selected")>54
+Megabit/s</OPTION></SELECT> </TD>
+</TR><TR
+TITLE="Changes the multicast rate (setting from 1 up to 54 megabit/s, default 'Auto'). The 'Auto' setting will determine the current optimum automatically.">
+<TD>Multicast
+Rate:</TD>
+<TD><SELECT NAME="wl0_mrate" STYLE="width: 100%;">
+<OPTION VALUE="0">Auto</OPTION>
+<OPTION
+VALUE='1000000' $(test "$wl0_mrate" = "1000000" && echo "selected=selected")>1
+Megabit/s</OPTION>
+<OPTION
+VALUE='2000000' $(test "$wl0_mrate" = "2000000" && echo "selected=selected")>2
+Megabit/s</OPTION>
+<OPTION
+VALUE='5500000' $(test "$wl0_mrate" = "5500000" && echo "selected=selected")>5.5
+Megabit/s</OPTION>
+<OPTION
+VALUE='6000000' $(test "$wl0_mrate" = "6000000" && echo "selected=selected")>6
+Megabit/s</OPTION>
+<OPTION
+VALUE='9000000' $(test "$wl0_mrate" = "9000000" && echo "selected=selected")>9
+Megabit/s</OPTION>
+<OPTION
+VALUE='11000000' $(test "$wl0_mrate" = "11000000" && echo "selected=selected")>11
+Megabit/s</OPTION>
+<OPTION
+VALUE='12000000' $(test "$wl0_mrate" = "12000000" && echo "selected=selected")>12
+Megabit/s</OPTION>
+<OPTION
+VALUE='18000000' $(test "$wl0_mrate" = "18000000" && echo "selected=selected")>18
+Megabit/s</OPTION>
+<OPTION
+VALUE='24000000' $(test "$wl0_mrate" = "24000000" && echo "selected=selected")>24
+Megabit/s</OPTION>
+<OPTION
+VALUE='36000000' $(test "$wl0_mrate" = "36000000" && echo "selected=selected")>36
+Megabit/s</OPTION>
+<OPTION
+VALUE='48000000' $(test "$wl0_mrate" = "48000000" && echo "selected=selected")>48
+Megabit/s</OPTION>
+<OPTION
+VALUE='54000000' $(test "$wl0_mrate" = "54000000" && echo "selected=selected")>54
+Megabit/s</OPTION></SELECT> </TD>
+</TR><TR
+TITLE="Changes the CTS protection mode (default: 'Disable'). If this value is change to 'Auto' the CTS protection mode will ensure that B-devices can connect even if multiple G-devices are in range. The network transmission rate for G-devices may suffer.">
+<TD>CTS
+Protection Mode:</TD>
+<TD><SELECT NAME="wl0_gmode_protection" STYLE="width: 100%;">
+<OPTION VALUE="off">Disable</OPTION>
+<OPTION
+VALUE='auto' $(test "$(nvram get wl0_gmode_protection)" = "auto" && echo "selected=selected")>Auto</OPTION>
+</SELECT> </TD>
+</TR><TR
+TITLE="This mode may speed up data transfers if the peer station supports this mode also. Default: 'Disable'">
+<TD>Frame
+Burst:</TD>
+<TD><SELECT NAME="wl0_frameburst" STYLE="width: 100%;">
+<OPTION VALUE="off">Disable</OPTION>
+<OPTION
+VALUE='on' $(test "$(nvram get wl0_frameburst)" = "on" && echo "selected=selected")>Enable</OPTION>
+</SELECT> </TD>
+</TR><TR
+TITLE="Changes the beacon interval (value from 1 to 65535 milliseconds, default 100). The frequent broadcast of beacons informs other stations about the ESSID and other wireless properties.">
+<TD>Beacon
+Interval:</TD>
+<TD><INPUT NAME="wl0_bcn" SIZE="32" VALUE="$(nvram get wl0_bcn)"></TD>
+</TR><TR
+TITLE="Changes the Delivery Traffic Indication Message (DTIM) interval (value from 1 to 255 milliseconds, default 1). The DTIM protocol data field informs about the next timeslot for broadcast or point-to-multipoint messages.">
+<TD>DTIM
+Interval:</TD>
+<TD><INPUT NAME="wl0_dtim" SIZE="32" VALUE="$(nvram get wl0_dtim)"></TD>
+</TR><TR
+TITLE="Changes the fragmentation threshold (value from 256 to 2346, default 2346). This value determines the packet size needed to activate the fragmentation of a data packet into several fragments. This may improve WLAN performance in cases, where frequent collisions occur. The WLAN fragmentation should be preferred over the IP fragmentation ('MTU').">
+<TD>Fragmentation
+Threshold:</TD><TD><INPUT NAME="wl0_frag" SIZE="32" VALUE="$(nvram get wl0_frag)"></TD>
+</TR><TR
+TITLE="Changes the RTS threshold (value from 0 to 2346, default 2347). This will activate the RTS/CTS handshaking mode for secure data transfers in utilized WLAN networks.">
+<TD>RTS
+Threshold:</TD>
+<TD><INPUT NAME="wl0_rts" SIZE="32" TYPE="TEXT" VALUE="$(nvram get wl0_rts)"></TD>
+</TR><TR
+TITLE="Changes the maximum size for single ip data packets. For the default of 1500 bytes leave this input field empty.">
+<TD>MTU
+Value:</TD><TD><INPUT NAME="ff_mtu" SIZE="32" TYPE="TEXT" VALUE="$(nvram get ff_mtu)"></TD>
+</TR><TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR><TD COLSPAN="2"><INPUT NAME="post_wifi" TITLE="Apply these settings. The settings are applied with the next restart." VALUE="Apply" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." VALUE="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE>
+</FORM>
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript">
+function set_txmw()
+{
+document.wifiform.txmw.value=Math.round(Math.pow(10,document.wifiform.txpwr.value/40))
+}
+function set_txpwr()
+{
+document.wifiform.txpwr.value=4*Math.round(
++parseFloat(document.wifiform.regdbm.value)
++parseFloat(document.wifiform.loss.value)
+-parseFloat(document.wifiform.gain.value)
+);
+if(1>document.wifiform.txpwr.value)document.wifiform.txpwr.value=1;
+if(96<document.wifiform.txpwr.value)document.wifiform.txpwr.value=96;
+set_txmw();
+}
+function set_dbm()
+{
+if(1>document.wifiform.regmw.value)document.wifiform.regmw.value=1;
+if(251<document.wifiform.regmw.value)document.wifiform.regmw.value=251;
+document.wifiform.regdbm.value=Math.round(40*Math.log(document.wifiform.regmw.value)/Math.log(10))/4;
+set_txpwr();
+}
+function set_mw()
+{
+if(1>document.wifiform.regdbm.value)document.wifiform.regdbm.value=1;
+if(24<document.wifiform.regdbm.value)document.wifiform.regdbm.value=24;
+document.wifiform.regmw.value=Math.round(Math.pow(10,document.wifiform.regdbm.value/10));
+set_txpwr();
+}
+if(0<document.wifiform.wl0_txpwr.value)
+document.wifiform.txpwr.value=document.wifiform.wl0_txpwr.value;
+document.wifiform.gain.value = 0.25*Math.round(
++parseFloat(document.wifiform.regdbm.value)*4
++parseFloat(document.wifiform.loss.value)*4
+-parseFloat(document.wifiform.txpwr.value)
+);
+set_txmw();
+</SCRIPT>
+<P><B>Tip</B>: For most devices, the
+setting <B>Antenna A</B> activates the left antenna (seen from the
+front).</P>
+EOF
+
+else
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+DIRTY=
+if [ -n "$post_wifi" ]; then
+case $wmode in
+master)
+wl0_mode=ap
+wl0_infra=1
+;;
+client)
+wl0_mode=sta
+wl0_infra=1
+;;
+*)
+wl0_mode=sta
+wl0_infra=0
+;;
+esac
+for V in wifi_proto wl0_mode wl0_infra wl0_ssid ff_bssid wl0_channel wifi_ipaddr wifi_netmask wifi_gateway wl0_antdiv wl0_txant wl0_gmode wl0_closed ff_noprobe wl0_rateset wl0_rate wl0_mrate wl0_gmode_protection wl0_frameburst wl0_bcn wl0_dtim wl0_frag wl0_rts wl0_phytype wl0_txpwr ff_txpwroverride wl0_distance ff_mtu; do
+eval "C=\$$V"
+C=$(httpd -d "$C")
+if [ "$C" != "$(nvram get $V)" ]; then
+DIRTY=1
+nvram set $V="$C"
+fi
+done
+if checkbridge; then
+DIRTY=1
+fi
+fi
+if [ -n "$DIRTY" ]; then
+nvram commit>/dev/null 2>&1
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>The
+changed settings are committed. The settings are active after the next
+<A HREF="reset.html">Restart</A>.</TD>
+</TR>
+</TABLE>
+EOF
+
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>No settings are
+changed.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

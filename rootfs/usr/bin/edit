@@ -1,0 +1,19 @@
+#!/bin/sh
+
+for l in $*;do
+	if [ -L "$l" ]; then
+		f=$(ls -l "$l")
+		f=${f##* }
+		if [ -z "${f##/rom/*}" ] && [ -f "$f" ]; then
+			rm "$l"
+			cp -a "$f" "$l"
+			linked="$linked $f,$l"
+		fi
+	fi
+done
+vi $*
+for l in $linked; do
+	if [ $(md5sum ${l#*,}|cut -d' ' -f1) = $(md5sum ${l%,*}|cut -d' ' -f1) ]; then
+		ln -sf ${l%,*} ${l#*,}
+	fi
+done

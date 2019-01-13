@@ -1,0 +1,5 @@
+[ "${INTERFACE%%[0-9]*}" = "wds" ] && { 
+	[ -x "/usr/sbin/nas" ] && /usr/sbin/nas lan $INTERFACE up
+ 	ip link set dev $INTERFACE up
+	/usr/sbin/brctl addif br0 $INTERFACE
+}

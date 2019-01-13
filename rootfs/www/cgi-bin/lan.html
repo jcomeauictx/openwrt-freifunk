@@ -1,0 +1,154 @@
+#!/bin/sh
+
+export DATE="18.4.2010";SCRIPT=${0#/rom}
+export TITLE="Admin: LAN"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: LAN</H1>
+EOF
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+#Speedups
+lan_proto="$(nvram get lan_proto)"
+lan_ipaddr=$(nvram get lan_ipaddr)
+lan_netmask=$(nvram get lan_netmask)
+dhcp_start=$(nvram get dhcp_start)
+dhcp_num=$(nvram get dhcp_num)
+test -z "$dhcp_num" && dhcp_num=4
+wifi_ipaddr=$(nvram get wifi_ipaddr)
+wifi_netmask=$(nvram get wifi_netmask)
+ff_lan_proto=$(nvram get ff_lan_proto)
+test -z "$ff_lan_proto" && lan_proto=static
+case $lan_proto in
+dhcp|disabled|olsr)
+;;
+*)lan_proto=static
+;;
+esac
+
+cat<<EOF
+<FORM ACTION="lan.html" CLASS="form" METHOD="POST"><TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0"
+CLASS="formfixwidth"><TR
+TITLE="Determines the operation mode of the four ethernet connectors. If still not configured, the default 'Static' is used.">
+<TD>LAN
+Protocol:</TD><TD><SELECT NAME="lan_proto" ONCHANGE="this.form.lan_ipaddr.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.lan_netmask.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.lan_gateway.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.dhcp_start.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.dhcp_num.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));this.form.dhcp_lease.disabled=(0!=this.value.indexOf('static')&&0!=this.value.indexOf('olsr'));">
+<OPTION
+VALUE='dhcp' $(test "$lan_proto" = "dhcp" && echo "selected=selected")>Query DHCP
+server</OPTION>
+<OPTION
+VALUE='static' $(test "$lan_proto" = "static" && echo "selected=selected")>Static</OPTION>
+<OPTION
+VALUE='disabled' $(test "$lan_proto" = "disabled" && echo "selected=selected")>Disabled</OPTION>
+</SELECT> </TD>
+</TR><TR
+TITLE="This is the IP address setting of the four ethernet connectors.">
+<TD>LAN
+IP:</TD><TD><INPUT NAME="lan_ipaddr" SIZE="32" TYPE="TEXT" VALUE="$lan_ipaddr"$(if [ "$lan_proto" != "static" ] && [ "$lan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="The netmask determines, which IP addresses can be reached directly.">
+<TD>LAN
+Netmask:</TD><TD><INPUT NAME="lan_netmask" SIZE="32" TYPE="TEXT" VALUE="$lan_netmask"$(if [ "$lan_proto" != "static" ] && [ "$lan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="Default route for the LAN jacks. This setting is normally left blank">
+<TD>LAN
+Default Route:</TD><TD><INPUT NAME="lan_gateway" SIZE="32" TYPE="TEXT" VALUE="$(nvram get lan_gateway)"$(if [ "$lan_proto" != "static" ] && [ "$lan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="Configures static routes with the 'ip:netmask:gatewayip:metric:interface' notation. Example: '10.1.2.0:255.255.255.0:0.0.0.0:1:vlan1'. Separate multiple entries with space.">
+<TD>Static Routes:</TD><TD><INPUT NAME="static_route" SIZE="32" TYPE="TEXT" VALUE="$(nvram get static_route)"></TD>
+</TR><TR
+TITLE="Disables the IP address translation (NAT/Masquerading) between the internal LAN and the wireless network. For special purposes, this option allows the direct communication between the internal LAN and the wireless LAN.">
+<TD>Disable NAT:</TD><TD><INPUT NAME="ff_nonat" TYPE="CHECKBOX" VALUE="1"$(if [ "$(nvram get ff_nonat)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+<TR
+TITLE="Disables the firewall function. The NAT rules (translation of internal LAN addresses to the IP address of the wireless network) will stay in force.">
+<TD>Disable Firewall:</TD><TD><INPUT NAME="fw_disable" TYPE="CHECKBOX" VALUE="1"$(if [ "$(nvram get fw_disable)" = "1" ];then echo ' checked="checked"';fi)></TD>
+</TR>
+<TR><TD COLSPAN="2">
+EOF
+
+if [ "$(test -n "$lan_ipaddr" && ipcalc -n $lan_ipaddr $wifi_netmask|cut -d'=' -f2)" = "$(test -n "$wifi_ipaddr" && ipcalc -n $wifi_ipaddr $wifi_netmask|cut -d'=' -f2)" ]; then
+
+cat<<EOF
+<B>Note</B>:
+The firewall function between WLAN and LAN is not active, because the
+LAN IP address ($lan_ipaddr) is part of the WLAN network
+($wifi_ipaddr/$wifi_netmask).
+EOF
+
+fi
+
+cat<<EOF
+</TD>
+</TR>
+<TR
+TITLE="Starting value for the dynamic allocated IP addresses.">
+<TD>DHCP
+Start IP:</TD><TD>$(test -n "$lan_ipaddr" && ipcalc -n $lan_ipaddr $lan_netmask|cut -d'=' -f2|cut -d'.' -f1-3).<INPUT NAME="dhcp_start" SIZE="6" TYPE="TEXT" VALUE="${dhcp_start##*.}"$(if [ "$lan_proto" != "static" ] && [ "$lan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)></TD>
+</TR>
+<TR
+TITLE="Count of IP addresses managed by the DHCP server. The sum total of start value and count should be less then 255.">
+<TD>DHCP
+Number of Users:</TD><TD><INPUT NAME="dhcp_num" SIZE="6" TYPE="TEXT" VALUE="$dhcp_num"$(if [ "$lan_proto" != "static" ] && [ "$lan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)>(DHCP off with &quot;0&quot;)</TD>
+</TR><TR
+TITLE="Time (in seconds) after which the leased IP address may be reallocated. Leave input field empty or enter 0 for the 12h default (43200s).">
+<TD>DHCP
+Lease Time:</TD><TD><INPUT NAME="dhcp_lease" SIZE="6" TYPE="TEXT" VALUE="$(nvram get dhcp_lease)"$(if [ "$lan_proto" != "static" ] && [ "$lan_proto" != "olsr" ];then echo ' disabled="disabled"';fi)>seconds</TD>
+</TR><TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR><TD COLSPAN="2"><INPUT NAME="post_lan" TITLE="Apply these settings. The settings are applied with the next restart." VALUE="Apply" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." VALUE="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+<P><B>Tip</B>:
+These settings influence the configuration, which is sent to wired clients
+via DHCP. To ensure a convenient network access, you should enter the <B>Host
+Name</B> and the internal <B>Domain</B> (-&gt; <A HREF="system.html">System</A>).
+</P>
+EOF
+
+else
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+DIRTY=
+if [ -n "$post_lan" ]; then
+test -n "$lan_proto" && ff_lan_proto=1
+for V in ff_lan_proto lan_proto lan_ipaddr lan_netmask lan_gateway static_route ff_nonat fw_disable dhcp_start dhcp_num dhcp_lease; do
+eval "C=\$$V"
+C=$(httpd -d "$C")
+if [ "$C" != "$(nvram get $V)" ]; then
+DIRTY=1
+nvram set $V="$C"
+fi
+done
+if checkbridge; then
+DIRTY=1
+fi
+fi
+if [ -n "$DIRTY" ]; then
+nvram commit>/dev/null 2>&1
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>The
+changed settings are committed. The settings are active after the next
+<A HREF="reset.html">Restart</A>.</TD>
+</TR>
+</TABLE>
+EOF
+
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>No settings are
+changed.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

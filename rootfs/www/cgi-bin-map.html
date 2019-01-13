@@ -1,0 +1,107 @@
+#!/bin/sh
+
+export DATE="28.10.2009";SCRIPT=${0#/rom}
+export TITLE="Map"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<SCRIPT SRC="http://ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=6.2" LANGUAGE="JavaScript" TYPE="text/javascript"></SCRIPT>
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
+var alias = new Array;
+var points = new Array;
+var unkpos = new Array;
+var lineid = 0;
+onload=new Function("if(null!=window.ffmapinit)ffmapinit();");
+$(test -f /www/latlon-static.js && cat /www/latlon-static.js)
+function Mid(mainip,aliasip)
+{
+alias[aliasip]=mainip;
+}
+function Node(mainip,lat,lon,ishna,hnaip,name)
+{
+points[mainip] = new VELatLong(lat, lon);
+map.AddPushpin(new VEPushpin(mainip, points[mainip],
+'images/'+(ishna?'hna':'node')+'.gif', 'Node:'+name,
+'<br><img src="images/'+(ishna?'hna':'node')+'.gif">'+
+'<br>IP:'+mainip+'<br>DefGW:'+hnaip));
+}
+function Self(mainip,lat,lon,ishna,hnaip,name)
+{
+//map.SetDashboardSize(VEDashboardSize.Small);
+map.LoadMap(new VELatLong(lat, lon), 15, VEMapStyle.Hybrid);
+map.SetScaleBarDistanceUnit(VEDistanceUnit.Kilometers);
+map.ShowMiniMap(14, 474);
+Node(mainip,lat,lon,ishna,hnaip,name);
+}
+function Link(fromip,toip,lq,nlq,etx)
+{
+if (0==lineid && null!=window.ffmapstatic) ffmapstatic();
+if (null != alias[toip]) toip = alias[toip];
+if (null != alias[fromip]) fromip = alias[fromip];
+if (null != points[fromip] && null != points[toip])
+{
+var w = 1;
+if (etx < 4) w++;
+if (etx < 2) w++;
+map.AddPolyline(new VEPolyline('id'+lineid, [points[fromip], points[toip]],
+new VEColor(102,Math.floor(lq*255.0),Math.floor(nlq*255.0),1.0), w));
+}
+else
+{
+if (null == points[toip]) unkpos[toip] = '';
+if (null == points[fromip]) unkpos[fromip] = '';
+}
+lineid++;
+}
+function PLink(fromip,toip,lq,nlq,etx,lata,lona,ishnaa,latb,lonb,ishnab)
+{
+Link(fromip,toip,lq,nlq,etx);
+}
+function ffmapinit()
+{
+if(null!=window.map)map.Dispose();
+map = new VEMap('ffmap');
+$(sed -ne" /^L/s/^Link('[0-9a-f:\.]\+','[0-9a-f:\.]\+',[0-9]\+\.[0-9]\+,[0-9]\+\.[0-9]\+,[0-9]\+\.[0-9]\+);\$/&/p
+/^P/s/^PLink('[0-9a-f:\.]\+','[0-9a-f:\.]\+',[0-9]\+\.[0-9]\+,[0-9]\+\.[0-9]\+,[0-9]\+\.[0-9]\+,[-0-9]\+\.[0-9]\+,[-0-9]\+\.[0-9]\+,[01],[-0-9]\+\.[0-9]\+,[-0-9]\+\.[0-9]\+,[01]);\$/&/p
+/^N/s/^Node('[0-9a-f:\.]\+',[-0-9]\+\.[0-9]\+,[-0-9]\+\.[0-9]\+,[01],'[0-9a-f:\.]\+','[-a-zA-Z0-9_\.]*');\$/&/p
+/^S/s/^Self('[0-9a-f:\.]\+',[-0-9]\+\.[0-9]\+,[-0-9]\+\.[0-9]\+,[01],'[0-9a-f:\.]\+','[-a-zA-Z0-9_\.]*');\$/&/p
+/^M/s/^Mid('[0-9a-f:\.]\+','[0-9a-f:\.]\+');\$/&/p
+" /var/run/latlon.js)
+var sorted = new Array;
+for (i in unkpos)
+{
+sorted[sorted.length] = i;
+}
+sorted.sort();
+for (i = 0; i < sorted.length; i++)
+{
+document.mapform.missing.options.add(new Option(sorted[i]));
+}
+sorted.length = 0;
+for (i in points)
+{
+sorted[sorted.length] = i;
+}
+sorted.sort();
+for (i = 0; i < sorted.length; i++)
+{
+document.mapform.goto.options.add(new Option(sorted[i]));
+}
+}
+function ffgoto(ip)
+{
+map.SetCenter(points[ip]);
+}
+</SCRIPT>
+<H1 STYLE="display:none">Map</H1>
+<DIV ID="ffmap" STYLE="position:relative; width:100%; height:640px;"></DIV>
+<FORM NAME="mapform">
+<P>Nodes without position:
+<SELECT NAME="missing" STYLE="width:200px"></SELECT>&nbsp;&nbsp;&nbsp;Go to
+node:
+<SELECT NAME="goto" ONCHANGE="if(null!=window.ffgoto)ffgoto(this.options[this.selectedIndex].text)" STYLE="width:200px">
+</SELECT>&nbsp;&nbsp;&nbsp;<A HREF="cgi-bin-map.kml">Google Earth File</A></P>
+</FORM>
+EOF
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

@@ -1,0 +1,14 @@
+#!/bin/sh
+
+case $FAILSAFE in "");;*)exit;;esac
+test -z "$(sed -n 's/^ *\([^:]\+\):.*/\1/p' /proc/net/wireless 2>&-)" && exit
+
+if [ ! -d /var/spool/cron/crontabs ]; then
+  mkdir -p /var/spool/cron/crontabs
+  cat>/var/spool/cron/crontabs/root<<EOF
+0-59/1 * * * *	/usr/sbin/cron.minutely
+0 * * * *	/usr/sbin/cron.hourly
+0 0 * * *	/usr/sbin/cron.daily
+EOF
+fi
+/usr/sbin/crond -L /dev/null

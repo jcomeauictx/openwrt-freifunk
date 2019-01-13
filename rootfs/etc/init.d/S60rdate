@@ -1,0 +1,8 @@
+#!/bin/sh
+
+case $FAILSAFE in "");;*)exit;;esac
+# Default date prevents freifunk-statistics from starting until year=2010
+date -s 123112002009
+if [ ! -f ${0%/*}/*ntp* ]; then
+	sh -c "pool='utcnist.colorado.edu ptbtime2.ptb.de tick.greyware.com nist1-la.ustiming.org time-nw.nist.gov ntp-nist.ldsbc.edu 128.138.140.44 192.53.103.104 71.252.193.25 64.147.116.229 131.107.13.100 198.60.73.8';i=0; while [ \$i -lt 4 ];do i=\$(( \$i+1 ));for n in \$pool; do sleep 5;if rdate -s \$n>/dev/null 2>&1;then exit;fi;done;done"&
+fi

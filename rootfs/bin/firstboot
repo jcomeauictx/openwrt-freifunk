@@ -1,0 +1,101 @@
+#!/bin/sh
+
+if [ -n "$(mount|grep jffs2|cut -d' ' -f3)" ]; then
+	echo "$0 cannot run while jffs2 mounted"
+	exit 1
+fi
+
+dev=/dev/null
+test -e /dev/tts/0 && dev=/dev/tts/0
+exec 2>$dev
+
+echo -n "Creating jffs2 partition... "
+mtd erase OpenWrt >&- 
+mount -t jffs2 /dev/mtdblock/4 /jffs
+echo "done"
+
+cd /jffs
+mount /dev/mtdblock/2 /rom -o ro
+if [ "0" != "$(nvram get ff_mini_fo)" ]; then
+	mount -t mini_fo -o base=/rom,sto=/jffs none /mnt
+	cd /mnt
+else
+	echo -n "Creating directories... "
+	{
+		cd /rom
+		find . -type d
+		cd -
+	} | xargs mkdir
+	echo "done"
+
+	echo -n "Setting up symlinks... "
+	for file in $(cd /rom; find *  -type f; find *  -type l;)
+	do {
+		ln -sf  /rom/$file $file
+	} done
+	ipks=$(grep mtdblocke /proc/partitions|if read line;then set $line;echo $3;fi)
+	if [ -n "$ipks" ] && [ 2368 -gt $ipks ]; then
+		# Save some JFFS2 space on 2 Mb 
+		ipks=$(cd /rom;find usr/lib/ipkg -type f|grep -v freifunk)
+	else
+		ipks=usr/lib/ipkg
+	fi
+	tar cC /rom $ipks|tar x
+	echo "done"
+fi
+
+if [ -f /usr/bin/dropbear ]; then
+	echo -n "Setting up dropbear... "
+	mkdir -p etc/dropbear
+	if [ ! -f etc/dropbear/dropbear_dss_host_key ]; then
+		dsskey=$(/rom/usr/sbin/nvram get ff_dsskey)
+		if [ -n "$dsskey" ] && [ -f /rom/www/cgi-bin/freifunk-upload ]; then
+			echo -n $dsskey|/rom/www/cgi-bin/freifunk-upload -a2b>etc/dropbear/dropbear_dss_host_key
+			chmod 0600 etc/dropbear/dropbear_dss_host_key
+		else
+			dropbearkey -t dss -f etc/dropbear/dropbear_dss_host_key
+			nvram set ff_dsskey=$(/rom/www/cgi-bin/freifunk-upload -b2a<etc/dropbear/dropbear_dss_host_key) commit
+		fi
+	fi
+	if [ ! -f etc/dropbear/authorized_keys ]; then
+		pubkey=$(/rom/usr/sbin/nvram get ff_pubkey)
+		test -n "$pubkey" && echo -e "$pubkey" > etc/dropbear/authorized_keys
+		chmod 0600 etc/dropbear/authorized_keys
+	fi
+	test -f etc/dropbear/dropbear_dss_host_key && rm etc/init.d/S*telnet
+	autorun="$(nvram get ff_autorun)"
+	if [ -n "$autorun" ]; then
+		echo -e "$autorun" > /tmp/.autorun.firstboot
+		chmod +x /tmp/.autorun.firstboot
+		/tmp/.autorun.firstboot>/tmp/.autorun.firstboot.out 2>&1 &
+	fi
+fi
+
+export ff_pw="$(/rom/usr/sbin/nvram get ff_pw)"
+test -n "$ff_pw" || export ff_pw=admin
+test -L etc/passwd && rm etc/passwd
+if [ -n "${ff_pw##\$1\$*}" ]; then
+	# Clear pw. The passwd cmd has /etc/passwd hard wired...
+	mkdir /tmp/setpass
+	mkdir /tmp/setpass/bin
+	mkdir /tmp/setpass/etc
+	cp -a /rom/lib /tmp/setpass
+	echo "root::0:0:root:/tmp:/bin/ash">/tmp/setpass/etc/passwd
+	cp /rom/bin/busybox /tmp/setpass/bin
+	ln -s busybox /tmp/setpass/bin/sh
+	ln -s busybox /tmp/setpass/bin/echo
+	ln -s busybox /tmp/setpass/bin/sleep
+	ln -s busybox /tmp/setpass/bin/passwd
+	/rom/usr/sbin/chroot /tmp/setpass sh -c 'sh -c "echo \"$ff_pw\";sleep 1;echo \"$ff_pw\""|passwd'
+	cp /tmp/setpass/etc/passwd etc/passwd
+	rm -r /tmp/setpass
+else
+	echo "root:$ff_pw:0:0:root:/tmp:/bin/ash">etc/passwd
+fi
+export ff_pw=
+echo "done"
+
+sync
+umount /mnt
+umount /rom
+umount /jffs

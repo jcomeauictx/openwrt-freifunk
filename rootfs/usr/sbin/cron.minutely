@@ -1,0 +1,155 @@
+#!/bin/sh
+
+# Will run every minute (at 00:00, 00:01, ...)
+
+func_wifi_get_params ()	{			# wstat, Mode, Channel, BSSID
+	wl -i $wdev status 2>&- |
+	 sed -ne "s/^Mode: \([ a-zA-Z]*[a-zA-Z]\).*Channel: \([0-9]*\).*/Mode='\1'\nChannel=\2/p" \
+	     -ne "/^BSSID: /!d;s/^BSSID: \(..:..:..:..:..:..\).*/BSSID=\1/;y/abcdef/ABCDEF/;p"
+
+	sed -n "s/.*$wdev: *[0-9]* *\([0-9]*\).*/wstat=\1/p" /proc/net/dev
+}
+
+test -e /tmp/.autorun && /tmp/.autorun
+test -e /dev/misc/crondog && : > /dev/misc/crondog
+
+wdev=$(sed -n 's/^ *\([^:]\+\):.*/\1/p' /proc/net/wireless 2>&-)
+case $wdev in "")exit;;esac
+wifi wdog 2>&-
+
+eval $(func_wifi_get_params)
+
+ostat=$(cat /var/run/status.$wdev 2>&-)
+echo $wstat>/var/run/status.$wdev
+rand=$(dd if=/dev/urandom bs=2 count=1 2>&-|hexdump|if read line;then echo 0x${line#* };fi)
+ff_bssid=$(nvram get ff_bssid|sed -e "y/abcdef/ABCDEF/")
+
+for i in /etc/local.cron /etc/local.cron-*; do
+	if test -f $i; then
+		trap - INT QUIT TSTP
+		. $i
+	fi
+done
+
+restart=1
+for p in $(pidof olsrd);do
+	egrep -q '\b/var/etc/olsrd-ipv6.conf\b' /proc/$p/cmdline || unset restart
+done
+case $(( $rand % 4321 )) in 1)restart=1;;esac
+case $restart in 1)
+	# Restart approx every three days
+	logger -t cron.minutely "restarting olsrd"
+	exec /etc/init.d/*olsrd restart
+;;esac
+
+restart=
+case $Mode in Master);;*)
+	case $ostat in "");;*)case $ostat in $wstat)
+		restart=1
+	;;esac;;esac
+	case $Mode in "Ad Hoc")
+		case $(nvram get wl0_channel) in $Channel);;*)
+			restart=1
+		;;esac
+		case $ff_bssid in "");;*)case $ff_bssid in $BSSID);;*)
+			restart=1
+		;;esac;;esac
+	;;esac
+;;esac
+case $restart in 1)
+	pidof horst >&- || {
+		# Wifi dead? Try restart
+		logger -t cron.minutely "restarting wifi, rx_stat=$wstat old_rx_stat=$ostat channel=$Channel bssid=$BSSID"
+		exec wifi up
+	}
+;;esac
+
+if grep -q '^LoadPlugin "olsrd_dyn_gw_plain.so' /etc/olsrd.conf 2>&-;then
+	case $(nvram get ff_ping) in "")
+		tabgw=
+		set -- $(ip -f inet route list exact 0/0)
+		case $3 in "")
+			set -- $(ip -f inet route list exact 0/0 table olsr-fail)
+			defgw=$3
+		;;*)
+			tabgw=main
+			defgw=$3
+		;;esac
+		case $defgw in "");;*)
+			hyst=$(cat /var/run/dyngw.hyst 2>&-)
+			hyst=${hyst:-0}
+			# Root DNS servers, refresh with "dig @A.ROOT-SERVERS.NET"
+			case $(( $rand % 10 )) in
+				0)dns=a.root-servers.net;ip=198.41.0.4;;
+				1)dns=b.root-servers.net;ip=192.228.79.201;;
+				2)dns=c.root-servers.net;ip=192.33.4.12;;
+				3)dns=d.root-servers.net;ip=128.8.10.90;;
+				4)dns=e.root-servers.net;ip=192.203.230.10;;
+				5)dns=f.root-servers.net;ip=192.5.5.241;;
+				6)dns=g.root-servers.net;ip=192.112.36.4;;
+				7)dns=h.root-servers.net;ip=128.63.2.53;;
+				8)dns=i.root-servers.net;ip=192.36.148.17;;
+				9)dns=j.root-servers.net;ip=192.58.128.30;;
+				*)exit;;
+			esac
+			test -s /var/run/$dns || nslookup $dns|sed -ne'/^Name:/{n;s/^Address: *//p}'>/var/run/$dns
+			test -s /var/run/$dns && ip=$(cat /var/run/$dns)
+			ok=0
+			ttl=$(nvram get ff_trcttl)
+			ttl=${ttl:-5}
+			# -f 5: start with minttl 5 (the first hops are often blocked)
+			eval $(traceroute -f $ttl -w 5 -m $(( ttl + 2 )) -n $ip 2>&-|sed -ne '/![HNP]/d;/^[ 0-9]\+ \+[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+ /{s/.*/ok=$(( $ok + 1));/;p}')
+			if [ $ok -ge 2 ];then
+				hyst=0
+				case $tabgw in "")
+					logger -t cron.minutely "activate HNA4 for $defgw"
+					ip route flush table olsr-fail 2>&-
+					ip route add default via $defgw
+					ip route flush cache
+				;;esac
+			else
+				case $hyst in 0|1|2)hyst=$(( $hyst + 1 ));;esac
+				case $hyst in 3)case $tabgw in main)
+					logger -t cron.minutely "deactivate HNA4 for $defgw"
+					ip route flush table olsr-fail 2>&-
+					ip route add default via $defgw table olsr-fail
+					ip route del default via $defgw
+					ip route flush cache
+				;;esac;;esac
+			fi
+			echo $hyst>/var/run/dyngw.hyst
+		;;esac
+	;;*) # ff_ping
+		eval $(ip -f inet route list table olsr-fail|while read line;do
+			set $line;
+			case $2 in via)
+				list=${list:+$list }$1
+				echo pinglist=\"$list\"
+				echo defgw=$3
+			;;esac
+		done)
+		case $pinglist in "");;*)
+			ok=0
+			for pingip in $pinglist;do
+				ok=$(ping -c 1 -q $pingip 2>&-|grep "packets received"|cut -d' ' -f4)
+				if [ $ok -gt 0 ];then break;fi
+			done
+			hyst=$(cat /var/run/dyngw.hyst 2>&-)
+			hyst=${hyst:-0}
+			if [ $ok -gt 0 ];then
+				if [ $hyst -gt 0 ];then
+					ip route add default via $defgw
+					logger -t cron.minutely "activated HNA4 for $defgw"
+				fi
+				hyst=0
+			else
+				hyst=$(( $hyst + 1 ))
+				if [ $hyst -eq 3 ];then
+					ip route del default via $defgw
+					logger -t cron.minutely "deactivated HNA4 for $defgw"
+				fi
+			fi
+			echo $hyst>/var/run/dyngw.hyst
+		;;esac
+	;;esac
+fi

@@ -1,0 +1,230 @@
+#!/bin/sh
+
+export DATE="13.5.2010";SCRIPT=${0#/rom}
+export TITLE="Admin: System"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: System</H1>
+EOF
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+#Speedups
+ff_dnsmasq="$(nvram get ff_dnsmasq)"
+ff_mini_fo="$(nvram get ff_mini_fo)"
+ff_nonetmsg="$(nvram get ff_nonetmsg)"
+wl0_country_code="$(nvram get wl0_country_code)"
+ff_tz="$(nvram get ff_tz)"
+test -z "$ff_tz" && ff_tz="MET-1MEST-2,M3.3.0,M10.5.0"
+
+cat<<EOF
+<SCRIPT LANGUAGE="JavaScript" TYPE="text/javascript"><!--
+function validate(obj) {
+old_mini_fo=$(nvram get ff_mini_fo)
+for(var i = 0; i < obj.ff_mini_fo.length; i++) {
+if (obj.ff_mini_fo[i].checked) {
+new_mini_fo=obj.ff_mini_fo[i].value;
+}
+}
+if (('1'==old_mini_fo) != ('1'==new_mini_fo)) {
+var ask = 'mini_fo='+new_mini_fo+' reformats JFFS2. Enter OK.';
+if ('en'=='de') ask = 'mini_fo='+new_mini_fo+' formatiert JFFS2. OK eingeben.';
+return 'OK' == prompt(ask, '');
+}
+return true;
+}
+function showmap(obj)
+{
+var frm = document.getElementById("mapfrm");
+if (!frm)
+{
+var wdt = Math.floor(document.body.offsetWidth / 2);
+var lft = obj.offsetLeft;
+var top = obj.offsetTop + obj.offsetHeight;
+while (obj = obj.offsetParent)
+{
+lft += obj.offsetLeft;
+top += obj.offsetTop;
+}
+if (lft > document.body.offsetWidth - wdt - 8)
+lft = document.body.offsetWidth - wdt - 8;
+if (lft < 8)
+lft = 8;
+frm = document.createElement("IFRAME");
+frm.id = "mapfrm";
+frm.src = "../mapfrm.htm";
+frm.style.position = "absolute";
+frm.style.border = "2px outset gray";
+frm.style.left = lft+"px";
+frm.style.top = top+"px";
+frm.style.width = wdt+"px";
+frm.style.height = "300px";
+document.body.appendChild(frm);
+}
+else
+{
+document.body.removeChild(frm);
+}
+}
+--></SCRIPT>
+<FORM ACTION="system.html" NAME="systemform" METHOD="POST">
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="form"><TR
+TITLE="With this name the device can be addressed by name. This name will also be shown on the command prompt.">
+<TD>Host
+Name:</TD><TD><INPUT NAME="wan_hostname" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wan_hostname)"></TD>
+</TR><TR
+TITLE="Example for latitude and longitude: '52.5215;13.4078'. Separate the decimal values by semicolon.">
+<TD>GPS Position:</TD><TD NOWRAP="NOWRAP"><INPUT NAME="ff_adm_latlon" SIZE="42" TYPE="TEXT" VALUE="$(nvram get ff_adm_latlon)">
+<BUTTON ONCLICK="if(null!=window.showmap)showmap(this);return false">Map</BUTTON></TD>
+</TR><TR
+TITLE="Internet names within this domain will be rated as internal names. Please choose a name that is not used on the internet.">
+<TD>Domain:</TD>
+<TD><INPUT NAME="wan_domain" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wan_domain)"></TD>
+</TR><TR
+TITLE="DNS queries to resolve internet names into IP addresses will be sent to this IP address. If the input field is empty, a preconfigured standard address is used. Separate multiple DNS addresses with semicolon.">
+<TD>DNS
+Server:</TD><TD><INPUT NAME="wan_dns" SIZE="48" TYPE="TEXT" VALUE="$(nvram get wan_dns)">
+EOF
+
+if [ -x /etc/init.d/S*dnsmasq ];then
+
+cat<<EOF
+</TD>
+</TR>
+<TR
+TITLE="Disables the dnsmask DNS+DHCP server. This saves memory.">
+<TD>Start DNS/DHCP Server:</TD><TD><INPUT CLASS="radio" NAME="ff_dnsmasq" TYPE="RADIO" VALUE="1"$(if [ "$ff_dnsmasq" != "0" ];then echo ' checked="checked"';fi)>Enable&nbsp;
+<INPUT CLASS="radio" NAME="ff_dnsmasq" TYPE="RADIO" VALUE="0"$(if [ "$ff_dnsmasq" = "0" ];then echo ' checked="checked"';fi)>Disable
+EOF
+
+fi
+
+cat<<EOF
+</TD>
+</TR>
+<TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR
+TITLE="Use the mini_fo fanout file system instead of symbolic links. Saves space in JFF2, but may have bugs. Activated by default only on devices with 2Mb flash. Restart with format necessary.">
+<TD>Use mini_fo:</TD><TD><INPUT CLASS="radio" NAME="ff_mini_fo" TYPE="RADIO" VALUE="1"$(if [ "$ff_mini_fo" != "0" ];then echo ' checked="checked"';fi)>Enable&nbsp;
+<INPUT CLASS="radio" NAME="ff_mini_fo" TYPE="RADIO" VALUE="0"$(if [ "$ff_mini_fo" = "0" ];then echo ' checked="checked"';fi)>Disable
+</TD>
+</TR><TR
+TITLE="Additional source line for /etc/ipkg.conf. Example: 'src mynet http://download.mynet.org/packs'.">
+<TD>IPK Source:</TD><TD><INPUT NAME="ff_ipkg" SIZE="48" TYPE="TEXT" VALUE="$(nvram get ff_ipkg)">
+</TD>
+</TR><TR
+TITLE="Starting the device is announced with an UDP message on all LAN/WAN jacks. In rare occasion, the short time bridge configuration between LAN and WAN may hang the device.">
+<TD>Network
+start messages:</TD><TD><INPUT CLASS="radio" NAME="ff_nonetmsg" TYPE="RADIO" VALUE="0"$(if [ "$ff_nonetmsg" != "1" ];then echo ' checked="checked"';fi)>Enable&nbsp;
+<INPUT CLASS="radio" NAME="ff_nonetmsg" TYPE="RADIO" VALUE="1"$(if [ "$ff_nonetmsg" = "1" ];then echo ' checked="checked"';fi)>Disable
+</TD>
+</TR><TR
+TITLE="Remote syslog server (ip-address[:port]). On the server, the syslogd daemon should run with the '-r' parameter.">
+<TD>Syslog
+Server:</TD><TD><INPUT NAME="ff_syslog" SIZE="48" TYPE="TEXT" VALUE="$(nvram get ff_syslog)">
+</TD>
+</TR><TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR
+TITLE="Sets the environment variable TZ, which is used to correct the system date. For central europe, the default 'MET-1MEST-2,M3.3.0,M10.5.0' can be used.">
+<TD>Timezone:</TD><TD><INPUT NAME="ff_tz" SIZE="48" TYPE="TEXT" VALUE="$ff_tz">
+</TD>
+</TR><TR
+TITLE="Public key for root ssh-login, written to ~/.ssh/authorized_keys.">
+<TD>Public-SSH-Key:</TD><TD><INPUT NAME="ff_pubkey" SIZE="48" TYPE="TEXT" VALUE="$(nvram get ff_pubkey)">
+EOF
+
+if wl country >&- 2>&-;then
+
+cat<<EOF
+</TD>
+</TR>
+<TR
+TITLE="Determines the country setting, e.g. for acceptable radio channels.">
+<TD>Country:</TD>
+<TD><SELECT NAME="wl0_country_code" STYLE="width:100%">
+<OPTION>Not
+configured</OPTION>
+$(wl country list|sed -ne '2,$ {s/[^ 	]\+/<OPTION VALUE="&">& -/;s/="'${wl0_country_code%% *}'"/& SELECTED="SELECTED"/;s/.$/&<\/OPTION>/;p}')</SELECT></TD>
+</TR>
+<TR><TD COLSPAN="2">
+EOF
+
+else
+
+cat<<EOF
+</TD>
+</TR>
+<TR
+TITLE="Parameters for loading the WLAN driver module, e.g. 'countrycode=276'.">
+<TD>WLAN Module Parameters:</TD><TD><INPUT NAME="ff_ath_param" SIZE="48" TYPE="TEXT" VALUE="$(nvram get ff_ath_param)">
+EOF
+
+fi
+
+cat<<EOF
+</TD>
+</TR>
+<TR><TD COLSPAN="2">&nbsp;</TD>
+</TR><TR><TD COLSPAN="2"><INPUT NAME="post_system" ONCLICK="return validate(document.systemform);" TITLE="Apply these settings. The settings are applied with the next restart." VALUE="Apply" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." VALUE="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+<P>
+<B>Tip</B>: To ensure a convenient
+network access, you should enter the <B>Host Name</B> (a single name
+without dots) and the internal <B>Domain</B> (multiple names separated by
+dots). Example: If you set <B>Host Name</B> to &quot;mywrt&quot; and <B>Domain</B>
+to &quot;mynet.freifunk.net&quot;, it should be possible to call up the
+pages of this device with <A HREF="http://mywrt.mynet.freifunk.net/">http://mywrt.mynet.freifunk.net/</A>
+as well as with <A HREF="http://mywrt/">http://mywrt/</A>.</P>
+EOF
+
+else
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+DIRTY=
+if [ -n "$post_system" ]; then
+ff_reset=$(nvram get ff_reset)
+old_mini_fo=$(nvram get ff_mini_fo)
+if [ "0" != "$old_mini_fo" ] && [ "0" = "$ff_mini_fo" ]; then
+ff_reset=format
+elif [ "0" = "$old_mini_fo" ] && [ "0" != "$ff_mini_fo" ]; then
+ff_reset=format
+fi
+wl country >&- 2>&- && add="wl0_country_code" || add="ff_ath_param"
+test -x /etc/init.d/S*dnsmasq && add="$add ff_dnsmasq"
+wan_hostname=$(echo $wan_hostname|sed -e "s/[^a-z0-9A-Z\-]/_/g")
+for V in $add wan_dns wan_hostname ff_adm_latlon wan_domain ff_mini_fo ff_reset ff_nonetmsg ff_ipkg ff_syslog ff_tz ff_pubkey; do
+eval "C=\$$V"
+C=$(httpd -d "$C")
+if [ "$C" != "$(nvram get $V)" ]; then
+DIRTY=1
+nvram set $V="$C"
+fi
+done
+fi
+if [ -n "$DIRTY" ]; then
+nvram commit>/dev/null 2>&1
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>The
+changed settings are committed. The settings are active after the next
+<A HREF="reset.html">Restart</A>.</TD>
+</TR>
+</TABLE>
+EOF
+
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note"><TR><TD>No
+settings are changed.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

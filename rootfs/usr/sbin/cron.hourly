@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Will run every hour (at 00:00, 01:00, ...)
+
+if grep -q '^LoadPlugin "olsrd_nameservice.so' /etc/olsrd.conf 2>&-;then
+	#reread /etc/hosts
+	test -f /var/run/dnsmasq.pid && kill -HUP $(cat /var/run/dnsmasq.pid)
+fi

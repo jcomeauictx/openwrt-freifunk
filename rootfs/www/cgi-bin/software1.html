@@ -1,0 +1,184 @@
+#!/bin/sh
+
+export DATE="16.3.2010";SCRIPT=${0#/rom}
+export TITLE="Admin: Software 1"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: Software 1</H1>
+EOF
+
+if [ "(ro)" != "$(mount|grep " / "|if read line; then set $line;echo $6;fi)" ]; then
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+TOTMEM=$(grep MemTotal: /proc/meminfo|if read line;then set $line;echo $2;fi)
+install_reco=freifunk-ipv6
+if [ -z "$TOTMEM" ] || [ 8192 -lt $TOTMEM ]; then
+install_reco=freifunk-recommended-en
+fi
+if [ -z "$QUERY_STRING" ]; then
+
+cat<<EOF
+<FORM ACTION="software1.html" ENCTYPE="multipart/form-data" METHOD="POST">
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="form"
+TITLE="Pick an ipk-file for uploading to the devices. You can automatically or manually install this software achive file after uploading. If you select '${install_reco}', recommended software is installed automatically via Internet." border="0">
+<TR>
+<TD COLSPAN="2">Software file (*.ipk):</TD>
+</TR>
+<TR>
+<TD COLSPAN="2"><INPUT NAME="ipkfile" SIZE="32" TYPE="FILE" VALUE="Browse..."></TD>
+</TR>
+<TR>
+<TD><INPUT CHECKED="CHECKED" NAME="install" TYPE="RADIO" VALUE="1" ONCHANGE="this.form.ipkfile.disabled=(2==this.value);this.form.encoding=(2==this.value?'':'multipart/form-data')">Install
+automatically</TD>
+<TD><INPUT NAME="install" TYPE="RADIO" VALUE="0" ONCHANGE="this.form.ipkfile.disabled=(2==this.value);this.form.encoding=(2==this.value?'':'multipart/form-data')">Install
+manually </TD>
+</TR>
+<TR>
+<TD><INPUT NAME="install" TYPE="RADIO" VALUE="3" ONCHANGE="this.form.ipkfile.disabled=(2==this.value);this.form.encoding=(2==this.value?'':'multipart/form-data')">intro.jpg (main page)</TD>
+<TD><INPUT NAME="install" TYPE="RADIO" VALUE="2" ONCHANGE="this.form.ipkfile.disabled=(2==this.value);this.form.encoding=(2==this.value?'':'multipart/form-data')">&quot;${install_reco}&quot;</TD>
+</TR>
+<TR>
+<TD COLSPAN="2">&nbsp;</TD>
+</TR>
+<TR>
+<TD COLSPAN="2"><INPUT NAME="post_ipk" TITLE="Upload the specified software file and store in the /tmp directory." TYPE="SUBMIT" VALUE="Upload software">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." TYPE="SUBMIT" VALUE="Cancel"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+<NOSCRIPT>
+<FORM ACTION="software1.html" METHOD="POST">
+<P><INPUT TYPE="HIDDEN" NAME="install" VALUE="2"><INPUT TYPE="SUBMIT" NAME="post_ipk" VALUE="${install_reco}"></P>
+</FORM></NOSCRIPT>
+<H2>Manual Install</H2>
+<P>You may need to install and
+configure a software file manually. For this, upload the software file
+first. The installation is then possible with the SSH command line of the
+Linux operating system. Start an SSH client and connect to <SAMP>root@$(nvram get lan_ipaddr)</SAMP>. The password is the same as the password for the
+administration pages of the Web interface. <B>Tip</B>: Windows users can
+use the Freeware program
+<A HREF="http://www.chiark.greenend.org.uk/%7Esgtatham/putty/">PuTTY</A>
+as SSH client.</P>
+<P><B>Example</B>: The software file
+<SAMP>beispiel_1.0_mipsel.ipk</SAMP> should be installed. After uploading
+the ipk file, the manual installation is started on the SSH command line
+with the following input: <CODE>ipkg&nbsp;install&nbsp;/tmp/beispiel_1.0_mipsel.ipk</CODE>
+[Enter key].</P>
+<P>With an active Internet
+connection, the following commands can be used alternatively:</P>
+<UL>
+<LI><CODE>ipkg update</CODE>: Updates
+package lists from servers specified in /etc/ipkg.conf.</LI>
+<LI><CODE>ipkg list|less</CODE>: Shows
+informations about available software packages.</LI>
+<LI><CODE>ipkg install name</CODE>: Installs a
+software package via Internet.</LI>
+</UL>
+<P>Commands are entered at the prompt
+and confirmed with the Enter key. Some of the more useful commands are:
+<CODE>ls</CODE>, <CODE>cd</CODE>, <CODE>cp</CODE>, <CODE>rm</CODE> and
+<CODE>vi</CODE>. Many commands also have a short help accessible via the
+<CODE>-h</CODE> option, for example <CODE>cp -h</CODE>. In order to
+modify a configuration file (e.g. <SAMP>/etc/local.dnsmasq.conf</SAMP>),
+do the following:</P>
+<OL>
+<LI>Type
+the command <CODE>cd /etc</CODE> and confirm with [Enter].</LI>
+<LI>The
+command <CODE>ls -l loc*</CODE> to view the contents of the directory.</LI>
+<LI>Enter
+the command <CODE>vi local.dnsmasq.conf</CODE> to view and edit. To
+make life easier, use the [Tab] key to automatically complete the
+filename, e.g. enter <CODE>vi local.d</CODE> and complete by pressing
+[Tab].</LI>
+<LI>Use
+the cursor keys to move to the location where you need to make the
+modification.</LI>
+<LI>Use the [i]
+key to enter the insert mode. Now the text may be modified or entered.
+Use the [Esc] key to exit the insert mode and return to the command
+mode.</LI>
+<LI>In the command mode, use [d] [d] to
+delete an entire line.</LI>
+<LI>Using
+[:] [w] [q] [Enter] you can save your changes and exit the editor.
+</LI>
+<LI>With [:] [q]
+[!] [Enter] you leave the editor without storing you modifications.</LI>
+</OL>
+<P><B>Note</B>:
+Many of the configuration files are links to the read-only ROM partition.
+To modify these files, you need to remove the link first (<CODE>rm
+/etc/sample.conf</CODE>). Then copy the current file from the ROM partion
+(<CODE>cp /rom/etc/sample.conf /etc</CODE>).</P>
+EOF
+
+elif [ "$QUERY_STRING" != "${QUERY_STRING#install=2}" ]; then
+echo "<PRE STYLE='width:100%;height:100%'>"
+ipkg update && ipkg -force-defaults install ${install_reco} 2>&1
+echo "</PRE>"
+elif ! eval $(./freifunk-upload -e 2>&1); then
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>$ffout</TD>
+</TR>
+</TABLE>
+<P>The
+software upload was aborted.</P>
+EOF
+
+elif [ -n "$ffout" ]; then
+if [ "1" = "$install" ]; then
+echo "<PRE>"
+ipkg -force-defaults install "$ffout" 2>&1
+rm "$ffout"
+echo "</PRE>"
+elif [ "3" = "$install" ]; then
+echo "<PRE>"
+set -x
+rm -f /www/images/intro.jpg
+mv "$ffout" /www/images/intro.jpg
+set +x
+echo "</PRE>"
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>Install
+software manually with <CODE>ipkg&nbsp;install&nbsp;$ffout</CODE></TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>No software file
+received.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>Additional
+software packages cannot be installed or removed in failsafe mode or in
+read-only mode. On the <A HREF="reset.html">Restart</A> page activate
+the <I>Normal restart</I> option and confirm with <CITE>Restart</CITE>.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

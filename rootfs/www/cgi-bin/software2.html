@@ -1,0 +1,125 @@
+#!/bin/sh
+
+export DATE="14.9.2008";SCRIPT=${0#/rom}
+export TITLE="Admin: Software 2"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: Software 2</H1>
+EOF
+
+if [ "(ro)" != "$(mount|grep " / "|if read line; then set $line;echo $6;fi)" ]; then
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+installed_packages=`cat /usr/lib/ipkg/status | sed -e '/^$/d' -e '/^\(Root\|Version\|Conffiles\)/d' -e 's/\(Package\|Status\):\ //g' -e 's/[\ ]*//g' -e '/^\('$system_packages'\)$/,/install/ d'`
+
+cat<<EOF
+<FORM ACTION="cgi-bin-software2.html">
+<TABLE WIDTH="100%" BORDER="1" CELLPADDING="0" CELLSPACING="0">
+<TR>
+<TH WIDTH="80%">Packet
+Name</TH>
+<TH WIDTH="20%">Action</TH>
+</TR>
+<TR>
+<TD COLSPAN="2">
+EOF
+
+last_package=""
+found_installed_packages=""
+for package in $installed_packages; do
+if [ "$last_package" ]; then
+if [ "$package" = "installokinstalled" ]; then
+found_installed_packages="$found_installed_packages\|$last_package"
+
+cat<<EOF
+</TD>
+</TR>
+<TR>
+<TD>$last_package</TD>
+<TD ALIGN="center"><INPUT TYPE="button" ONCLICK="self.location='software2.html?remove=$last_package'" VALUE="Remove">
+EOF
+
+fi
+last_package=""
+else
+last_package=$package
+fi
+done
+available_packages=`ipkg list | sed -e 's/\([^\ ]\)[\ \-\ ].*/\1/g' -e '/^\('$system_packages$found_installed_packages'\)$/ d'`
+for package in $available_packages;do
+
+cat<<EOF
+</TD>
+</TR>
+<TR>
+<TD>$package</TD>
+<TD ALIGN="center"><INPUT TYPE="button" ONCLICK="self.location='software2.html?install=$package'" VALUE="Install">
+EOF
+
+done
+
+cat<<EOF
+</TD>
+</TR>
+</TABLE>
+</FORM>
+<P><A HREF="software2.html?update">Update
+List</A></P>
+EOF
+
+else
+if [ "`echo $QUERY_STRING | grep install`" ]; then
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+eval "package=\$install"
+package=$(httpd -d "$package")
+echo "<PRE>"
+ipkg install $package
+echo "</PRE>"
+
+cat<<EOF
+<P><A HREF="software2.html">Back</A></P>
+EOF
+
+elif [ "`echo $QUERY_STRING | grep remove`" ];then
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+eval "package=\$remove"
+package=$(httpd -d "$package")
+echo "<PRE>"
+ipkg remove $package
+echo "</PRE>"
+
+cat<<EOF
+<P><A HREF="software2.html">Back</A></P>
+EOF
+
+else
+echo "<PRE>"
+ipkg update
+echo "</PRE>"
+
+cat<<EOF
+<P><A HREF="software2.html">Back</A></P>
+EOF
+
+fi
+fi
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>It
+is not possible to install or remove additional software packages when
+in Failsafe or Readonly mode. On the <A HREF="reset.html">Restart</A>
+page, activate the <I>Normal restart</I> option and confirm with
+<CITE>Restart</CITE>.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

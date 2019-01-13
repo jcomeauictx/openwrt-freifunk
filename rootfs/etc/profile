@@ -1,0 +1,24 @@
+#!/bin/sh
+[ -f /etc/banner ] && cat /etc/banner
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PS1='\u@\h:\w\$ '
+TZ=$(nvram get ff_tz)
+test -z "$TZ" && TZ=MET-1MEST-2,M3.3.0,M10.5.0
+export TZ
+
+alias less=more
+alias vim=vi
+alias ..='cd ..'
+alias ...='cd ../..'
+alias cd..='cd ..'
+alias cls=clear
+alias del='rm -i'
+alias dir='ls -l -d'
+alias e=exit
+alias l=less
+alias ll='ls -l'
+alias la='ls -la'
+alias md='mkdir -p'
+alias rd=rmdir
+alias opkg=ipkg

@@ -1,0 +1,10 @@
+#!/bin/sh
+test "$1" = "-n" && shift
+for i in $*; do
+  test gw = $i && i=via
+  test -n != $i && c=$c" "$i
+done
+test -z "$c" && exec sh -c "for i in olsr-main main olsr-fail olsr-tunnel olsr-default;do ip ro ls table \$i;done"
+echo "[Install freifunk-openwrt-compat for $0]">&2
+set -x
+exec ip ro $c

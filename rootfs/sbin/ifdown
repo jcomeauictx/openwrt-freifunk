@@ -1,0 +1,18 @@
+#!/bin/ash
+. /etc/functions.sh
+
+if_init $1
+
+test -f $pidfile && {
+	pid=$(cat $pidfile)
+	case $pid in "");;*)
+		kill $pid 2>&-
+		case $(sed -n '1p' /proc/$pid/cmdline) in */pppoecd)
+			sleep 5
+			kill $pid 2>&-
+		;;esac
+	;;esac
+	rm -f $pidfile
+}
+$ignr ip -f inet addr flush dev $iface
+$ignr ip link set dev $iface down

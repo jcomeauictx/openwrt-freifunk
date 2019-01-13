@@ -1,0 +1,329 @@
+#!/bin/sh
+
+# iptables -t mangle -A PREROUTING -d 104.198.65.97 -j MARK --set-mark 0xff
+# requires iptables_1.3.3-3_mipsel.ipk:libipt_MARK.so
+
+case $FAILSAFE in "");;*)exit;;esac
+
+. /etc/functions.sh
+
+log_drop() {
+	case $ff_debug in 1)iptables $* -j LOG --log-prefix "$2:";;esac
+	iptables $* -j DROP
+}
+
+NATUSED=
+
+# Note: don't use conntrack/state
+
+add_inout() {
+	# Trust local interfaces
+	iptables -A INPUT -i $LODEV -j ACCEPT
+	iptables -A OUTPUT -o $LODEV -j ACCEPT
+
+	# Ignore OLSR packets directly from these stations, e.g.
+	# if this connection is too slow, ignore sporadic packets
+	IFS=\;
+	for i in $(nvram get ff_ign); do
+		iptables -A INPUT -s $i -p udp --dport 698 -j DROP
+	done
+	unset IFS
+
+	case $LANDEV in "");;*)
+		# Recv or send via LAN if not loopback IP
+		iptables -A INPUT -i $LANDEV -j ACCEPT
+		iptables -A OUTPUT -o $LANDEV -j ACCEPT
+	;;esac
+
+	case $WIFIDEV in "");;*)
+		if ! in_range $LANADR/$LANPRE;then
+			case $LANADR in "")
+				# Don't recv or send via WIFI if private IP
+				log_drop -A INPUT -i $WIFIDEV -s 192.168.0.0/16
+				log_drop -A OUTPUT -o $WIFIDEV -d 192.168.0.0/16
+			;;*)
+				# Don't recv or send via WIFI if LAN IP
+				log_drop -A INPUT -i $WIFIDEV -s $LANNET/$LANPRE
+				log_drop -A OUTPUT -o $WIFIDEV -d $LANNET/$LANPRE
+			;;esac
+		fi
+		# Recv or send via WIFI if not loopback IP
+		iptables -A INPUT -i $WIFIDEV -j ACCEPT
+		iptables -A OUTPUT -o $WIFIDEV -j ACCEPT
+	;;esac
+
+	case $WANDEV in "");;*)
+		if in_range $WANADR/$WANPRE;then
+			# Recv or send via WAN if not loopback IP
+			iptables -A INPUT -i $WANDEV -j ACCEPT
+			iptables -A OUTPUT -o $WANDEV -j ACCEPT
+		else
+			case $LANADR in "")
+				# Don't recv or send if private IP
+				log_drop -A INPUT -i $WANDEV -s 192.168.0.0/16
+				log_drop -A OUTPUT -o $WANDEV -d 192.168.0.0/16
+			;;*)
+				# Don't recv or send if LAN-IP
+				log_drop -A INPUT -i $WANDEV -s $LANNET/$LANPRE
+				log_drop -A OUTPUT -o $WANDEV -d $LANNET/$LANPRE
+			;;esac
+
+			case $WIFIADR in "");;*)
+				# Don't recv or send if WIFI-IP
+				log_drop -A INPUT -i $WANDEV -s $WIFINET/$WIFIPRE
+				log_drop -A OUTPUT -o $WANDEV -d $WIFINET/$WIFIPRE
+			;;esac
+
+			# Recv fragments
+			iptables -A INPUT -i $WANDEV -f -j ACCEPT
+
+			# If configured: recv SSH/HTTP/HTTPS requests
+			case $(nvram get ff_wanssh) in 1)iptables -A INPUT -i $WANDEV -p tcp --dport 22 --syn -j ACCEPT;;esac
+			case $(nvram get ff_wanhttp) in 1)iptables -A INPUT -i $WANDEV -p tcp --dport 80 --syn -j ACCEPT;;esac
+			case $(nvram get ff_wanhttps) in 1)iptables -A INPUT -i $WANDEV -p tcp --dport 443 --syn -j ACCEPT;;esac
+			# Recv TCP answers
+			iptables -A INPUT -i $WANDEV -p tcp ! --syn --dport 1024: -j ACCEPT
+
+			# If configured: recv incoming ICMP echo requests
+			case $(nvram get ff_wanicmp) in 1)iptables -A INPUT -i $WANDEV -p icmp --icmp-type echo-request -j ACCEPT;;esac
+			# Recv ICMP answers
+			iptables -A INPUT -i $WANDEV -p icmp --icmp-type ! echo-request -j ACCEPT
+
+			# Recv DNS answers
+			iptables -A INPUT -i $WANDEV -p udp --sport 53 --dport 1024: -j ACCEPT
+			# Recv DHCP(univ-bcast) answers
+			iptables -A INPUT -i $WANDEV -d 255.255.255.255 -p udp --sport 68 --dport 67 -j ACCEPT
+
+			# Send if not loopback IP
+			iptables -A OUTPUT -o $WANDEV -j ACCEPT
+		fi
+	;;esac
+
+	# Drop anything else
+	log_drop -A INPUT
+	log_drop -A OUTPUT
+}
+
+# Note: don't use conntrack/state. Only limited services
+# to LAN for security. More services if the NAT modules
+# are loaded: with conntrack (-m state) that's possible.
+
+add_forward() {
+	# Forward OK on same iface
+	for i in $LANDEV $WIFIDEV $WANDEV;do
+		case $i in "");;*)iptables -A FORWARD -i $i -o $i -j ACCEPT;;esac
+	done
+
+	case $WANDEV in "");;*)if ! in_range $WANADR/$WANPRE;then
+		# If WAN port attached to internal DHCP-capable router: do not forward private IPs
+		iptables -A FORWARD -p icmp -o $WANDEV -j ACCEPT
+		log_drop -A FORWARD -d 169.254.0.0/16 -o $WANDEV
+		log_drop -A FORWARD -d 192.168.0.0/16 -o $WANDEV
+		log_drop -A FORWARD -d 172.16.0.0/12 -o $WANDEV
+		log_drop -A FORWARD -d 10.0.0.0/8 -o $WANDEV
+		case $(nvram get ff_smartgw) in 1)
+			iptables -A FORWARD -i tunl0 -o $WANDEV -j ACCEPT
+			iptables -A FORWARD -o tunl0 -i $WANDEV -j ACCEPT
+		;;esac
+	fi;;esac
+
+	for i in \$WIFI \$WAN;do eval '
+		case '$i'DEV in "");;*)
+			# Repair braindead websites that cannot recv ICMP-frag-needed
+			case '$i'MTU in "");;*)test 1500 -gt '$i'MTU && {
+				iptables -A FORWARD -o '$i'DEV -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+			};;esac
+
+			# Forward OK to WIFI/WAN
+			iptables -A FORWARD -o '$i'DEV -j ACCEPT
+
+			case $LANDEV in "");;*)
+				if in_range $LANADR/$LANPRE;then
+					# Forward OK from WIFI/WAN to LAN
+					iptables -A FORWARD -i '$i'DEV -o $LANDEV -j ACCEPT
+				else
+					# Forward fragments to LAN
+					iptables -A FORWARD -i '$i'DEV -o $LANDEV -f -j ACCEPT
+					# Forward TCP answers to LAN
+					iptables -A FORWARD -i '$i'DEV -o $LANDEV -p tcp ! --syn --dport 1024: -j ACCEPT
+					# Forward ICMP answers to LAN
+					iptables -A FORWARD -i '$i'DEV -o $LANDEV -p icmp --icmp-type ! echo-request -j ACCEPT
+					# Forward DNS answers to LAN
+					iptables -A FORWARD -i '$i'DEV -o $LANDEV -p udp --sport 53 --dport 1024: -j ACCEPT
+				fi
+			;;esac
+		;;esac'
+	done
+	log_drop -A FORWARD
+}
+
+ins_state() {
+	case $WANDEV in "");;*)if ! in_range $WANADR/$WANPRE;then
+		iptables -I OUTPUT -o $WANDEV -m state --state ESTABLISHED,RELATED,NEW -j ACCEPT
+		iptables -I INPUT -i $WANDEV -m state --state ESTABLISHED,RELATED -j ACCEPT
+		log_drop -I INPUT -i $WANDEV -m state --state INVALID
+	fi;;esac
+
+	for i in $WIFIDEV $WANDEV;do if ! in_range $LANADR/$LANPRE;then
+		iptables -I FORWARD -i $LANDEV -o $i -m state --state ESTABLISHED,RELATED,NEW -j ACCEPT
+		iptables -I FORWARD -i $i -o $LANDEV -m state --state ESTABLISHED,RELATED -j ACCEPT
+		log_drop -I FORWARD -i $i -o $LANDEV -m state --state INVALID
+	fi;done
+}
+
+ins_nat() {
+	LANNAT=
+	case $WIFIDEV in "");;*)case $LANDEV in "");;*)if ! in_range $LANADR/$LANPRE;then
+		use_nat
+
+		# Setup alias and dest nat for an ethernet DMZ PC, e.g.
+		# 172.31.255.254 on WLAN -> DMZ PC which has 192.168.1.2
+		# Also add to olsrd.conf: "HNA4 172.31.255.254 255.255.255.255"
+		IFS=\;
+		devnum=0
+		for dmz in $(nvram get ff_dmz); do
+			src=${dmz%[:,]*}
+			dst=${dmz#*[:,]}
+			ip addr add dev $WIFIDEV $src/32 label $WIFIDEV:$devnum
+			iptables -t nat -I PREROUTING -d $src -j DNAT --to $dst
+			iptables -I FORWARD -s ! $LANNET/$LANPRE -d $dst -j ACCEPT
+			iptables -I FORWARD -s $dst -d ! $LANNET/$LANPRE -j ACCEPT
+			iptables -I OUTPUT -o lo -s $src -d $src -j ACCEPT
+			iptables -I INPUT -i lo -s $src -j ACCEPT
+			devnum=$(( $devnum + 1 ))
+		done
+		unset IFS
+
+		case $LANADR in "")
+			LANNAT=192.168.0.0/16
+		;;*)
+			LANNAT=$LANNET/$LANPRE
+		;;esac
+		iptables -t nat -I POSTROUTING -o $WIFIDEV -s $LANNAT -d ! $LANNAT -j MASQUERADE
+	fi;;esac;;esac
+
+	# Mask packets from these WLAN DHCP clients, so they can do 
+	# inet w/o OLSR unless HNA4 is to be used to accomplish this
+	case $(nvram get ff_wldhcp_hna4) in 1);;*)
+		ff_wldhcp=$(nvram get ff_wldhcp)
+		case $ff_wldhcp in "");;*)
+			use_nat
+			IFS=\;
+			for wldhcp in $ff_wldhcp; do
+				iptables -t nat -I POSTROUTING -s ${wldhcp%[:,]*} -j MASQUERADE
+			done
+			unset IFS
+		;;esac
+	;;esac
+	case $WANDEV in "");;*)if in_range $WANADR/$WANPRE;then
+		case $LANNAT in "");;*)
+			iptables -t nat -I POSTROUTING -o $WANDEV -s $LANNAT -d ! $LANNAT -j MASQUERADE
+		;;esac
+	else
+		use_nat
+		iptables -t nat -I POSTROUTING -o $WANDEV -j MASQUERADE
+	fi;;esac
+}
+
+clr_nat() {
+	ff_dmz=$(nvram get ff_dmz)
+	case $ff_dmz in "");;*)
+		get_netparam
+		case $WIFIDEV in "");;*)case $LANDEV in "");;*)if ! in_range $LANADR/$LANPRE;then
+			IFS=\;
+			devnum=0
+			for dmz in $ff_dmz; do
+				src=${dmz%[:,]*}
+				ip addr del dev $WIFIDEV $src/32 label $WIFIDEV:$devnum
+				devnum=$(( $devnum + 1 ))
+			done
+			unset IFS
+		fi;;esac;;esac
+	;;esac
+}
+
+clr_tab() {
+	iptables -t $1 -F 2>&-
+	iptables -t $1 -X 2>&-
+	for c in $(iptables -t filter -nL|sed -n 's/^Chain \+\([^ ]\+\) \+(policy \+\([^)]\+\).*/\1=\2/p');do
+		case ${c#*=} in ACCEPT);;*)
+			iptables -t $1 -P ${c%=*} ACCEPT
+		;;esac
+	done
+}
+
+clr_fw() {
+	for t in filter nat mangle;do
+		clr_tab $t
+	done
+	unuse_nat
+}
+
+case $1 in
+	start)
+		echo "Starting firewall..."
+
+		# Dump dropped packets to klog, show with "dmesg -c"
+		ff_debug=$(nvram get ff_debug)
+		ff_nonat=$(nvram get ff_nonat)
+		fw_disable=$(nvram get fw_disable)
+
+		get_netparam
+		if in_range $LANADR/$LANPRE || ! in_range $WIFINET/$WIFIPRE;then
+			# Don't use firewall with OLSR on LAN
+			fw_disable=1
+		fi
+		case $fw_disable in 1);;*)
+			add_inout
+			add_forward
+		;;esac
+		case $ff_nonat in 1);;*)
+			ins_nat
+		;;esac
+		case $fw_disable in 1);;*)case $NATUSED in 1)
+			ins_state
+		;;esac;;esac
+		for i in /etc/local.fw /etc/local.fw-*; do
+			test -f $i && {
+				trap - INT QUIT TSTP
+				set start
+				. $i
+			}
+		done
+		case $NATUSED in 1)
+			# E.g. if UDP packets seen between insmod conntrack and -j MASQ
+			insmod flushnat >&-
+			rmmod flushnat
+		;;esac
+	;;
+	stop)
+		echo "Stopping firewall..."
+		for i in /etc/local.fw /etc/local.fw-*; do
+			test -f $i && {
+				trap - INT QUIT TSTP
+				set stop
+				. $i
+			}
+		done
+		clr_nat
+		clr_fw
+	;;
+	restart)
+		$0 stop
+		$0 start
+	;;
+	nat)
+		get_netparam
+		ins_nat
+	;;
+	clear-nat)
+		clr_nat
+		clr_tab nat
+	;;
+	status)
+		iptables -nvL
+	;;
+	*)
+		echo "Usage: $0 start|stop|restart|nat|clear-nat|status"
+	;;
+esac

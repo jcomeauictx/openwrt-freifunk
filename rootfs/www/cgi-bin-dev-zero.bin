@@ -1,0 +1,13 @@
+#!/bin/sh
+
+. /etc/functions.sh
+get_netparam
+if in_range $REMOTE_ADDR/32 || [ "via" != $(ip r get $REMOTE_ADDR|cut -d' ' -f2) ];then
+	echo "Content-type: application/octet-stream"
+	echo
+	cat /dev/zero
+else
+	echo "Content type: text/plain"
+	echo
+	echo "Denied from $REMOTE_ADDR. Sorry..."
+fi

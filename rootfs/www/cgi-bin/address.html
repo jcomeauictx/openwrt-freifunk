@@ -1,0 +1,105 @@
+#!/bin/sh
+
+export DATE="14.9.2008";SCRIPT=${0#/rom}
+export TITLE="Admin: Contact info"
+. ${SCRIPT%/*}/cgi-bin-pre.sh
+
+cat<<EOF
+<H1>Admin: Contact info</H1>
+EOF
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+read QUERY_STRING
+fi
+if [ -z "$QUERY_STRING" ]; then
+
+cat<<EOF
+<FORM ACTION="address.html" METHOD="POST">
+<TABLE CLASS="shadow0" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow1" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE CLASS="shadow2" CELLPADDING="0" CELLSPACING="0"><TR><TD><TABLE BORDER="0" CLASS="formfixwidth">
+<TR
+TITLE="Enter your nickname (short, for IRC, chat etc.)">
+<TD>Nickname:</TD>
+<TD><INPUT NAME="ff_adm_nick" SIZE="48" STYLE="width: 100%;" TYPE="TEXT" VALUE="$(nvram get ff_adm_nick)"></TD>
+</TR>
+<TR
+TITLE="Real name if you like.">
+<TD>Name:</TD>
+<TD><INPUT NAME="ff_adm_name" SIZE="48" STYLE="width: 100%;" TYPE="TEXT" VALUE="$(nvram get ff_adm_name)"></TD>
+</TR>
+<TR
+TITLE="Administrative email contact address">
+<TD>Email:</TD>
+<TD><INPUT NAME="ff_adm_mail" SIZE="48" STYLE="width: 100%;" TYPE="TEXT" VALUE="$(nvram get ff_adm_mail)"></TD>
+</TR>
+<TR
+TITLE="Administrative phone number">
+<TD>Phone:</TD>
+<TD><INPUT NAME="ff_adm_tel" SIZE="48" STYLE="width: 100%;" TYPE="TEXT" VALUE="$(nvram get ff_adm_tel)"></TD>
+</TR>
+<TR
+TITLE="Location hint for the device">
+<TD>Location:</TD>
+<TD><INPUT NAME="ff_adm_loc" SIZE="48" STYLE="width: 100%;" TYPE="TEXT" VALUE="$(nvram get ff_adm_loc)"></TD>
+</TR>
+<TR
+TITLE="Enter the URL for your mesh network. This will create a link on the homepage of this device. Example:'<A HREF=http://www.vaour.net/>VaourNet</A>'.">
+<TD>URL Net Hompeage</TD>
+<TD><INPUT NAME="ff_adm_neturl" SIZE="48" STYLE="width: 100%;" TYPE="TEXT" VALUE="$(nvram get ff_adm_neturl)"></TD>
+</TR>
+<TR
+TITLE="Notes and short hints regarding this access point. The text should not exceed 500 characters.">
+<TD>Notes:</TD>
+<TD><TEXTAREA COLS="48" NAME="ff_adm_note" ROWS="3" STYLE="width: 100%;">$(nvram get ff_adm_note)</TEXTAREA></TD>
+</TR>
+<TR>
+<TD COLSPAN="2">&nbsp;</TD>
+</TR>
+<TR>
+<TD COLSPAN="2"><INPUT NAME="post_adress" TITLE="Apply these settings. The settings are visible instantly on the 'Status' page." VALUE="Apply" TYPE="submit">&nbsp;&nbsp;&nbsp;<INPUT NAME="post_abort" TITLE="Cancel dialog page." VALUE="Cancel" TYPE="submit"></TD>
+</TR>
+</TABLE></TD></TR></TABLE></TD></TR></TABLE></TD></TR></TABLE></FORM>
+<P><B>Tip</B>: The settings
+on this page are visible for visitors on the
+<A HREF="../cgi-bin-contact.html">Contact</A> page.</P>
+EOF
+
+else
+IFS=\&;set ${QUERY_STRING%%[^%&=+-:@-_a-z~]*};unset IFS;eval $*
+DIRTY=
+if [ -n "$post_adress" ]; then
+for V in ff_adm_nick ff_adm_name ff_adm_mail ff_adm_tel ff_adm_loc ff_adm_neturl ff_adm_note; do
+eval "C=\$$V"
+C=$(httpd -d "$C")
+if [ "$C" != "$(nvram get $V)" ]; then
+DIRTY=1
+nvram set $V="$C"
+fi
+done
+fi
+if [ -n "$DIRTY" ]; then
+nvram commit>/dev/null 2>&1
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>The
+changed settings are committed. The settings are active now.</TD>
+</TR>
+</TABLE>
+EOF
+
+else
+
+cat<<EOF
+<TABLE BORDER="0" CLASS="note">
+<TR>
+<TD>No
+settings are changed.</TD>
+</TR>
+</TABLE>
+EOF
+
+fi
+fi
+
+. ${SCRIPT%/*}/cgi-bin-post.sh

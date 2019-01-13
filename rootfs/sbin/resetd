@@ -1,0 +1,12 @@
+#!/bin/sh
+while :; do
+	sleep 1
+	case $(($(cat /proc/sys/reset))) in 1)
+		sleep 5
+		case $(($(cat /proc/sys/reset))) in 1)
+			echo 4 > /proc/sys/diag
+			nvram unset ff_pw unset ff_reset set lan_proto=static set lan_ipaddr=192.168.1.1 set lan_netmask=255.255.255.0 commit
+			reboot
+		;;esac
+	;;esac
+done
